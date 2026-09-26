@@ -91,10 +91,19 @@ PRITOK — **реестр и платёжный агент в одной про�
 
 ## 5. Архитектура
 
+### 5.0 Две программы, а не одна
+
+Solana запрещает повторный вход A → B → A (разрешена только прямая рекурсия A → A). Если hook живёт в основной программе, любой её CPI `transfer_checked` (например, `trade_dvp`) пойдёт pritok → Token-2022 → pritok и упадёт с `ReentrancyNotAllowed`. Поэтому:
+
+- **`pritok_registry`** — transfer hook + аккаунты `Holder` (владелец — эта программа). Инструкции: `execute` (hook), `initialize_extra_account_meta_list`, `sync_holder` (вызывается основной программой через CPI при mint/burn, подпись PDA основной программы).
+- **`pritok`** — всё остальное: `Bond`, `Action`, `Claim`, счёт выплат, роли. Читает `Holder` (чужие аккаунты читать можно), обновляет их только через CPI в `pritok_registry`.
+
+Цепочки: `pritok → Token-2022 → pritok_registry` (перевод в `trade_dvp`) и `pritok → pritok_registry` (mint/burn) — повторного входа нет.
+
 ### 5.1 Токены
 
 - **Облигация** — Token-2022 mint с расширениями:
-  - `TransferHook` → наша программа (допуск получателя + контрольные точки отсечки);
+  - `TransferHook` → `pritok_registry` (допуск получателя + контрольные точки отсечки);
   - `MetadataPointer` + `TokenMetadata` — название выпуска, ISIN-подобный код (тестовый);
   - `PermanentDelegate` **не используем** (эмитент не должен уметь забрать бумаги).
   - Mint authority и burn — только у PDA программы.
@@ -107,7 +116,7 @@ PRITOK — **реестр и платёжный агент в одной про�
 |---|---|
 | `Config` | `operator`, `paused` |
 | `Bond` | `issuer`, `bond_mint`, `payment_mint`, `face_value`, `coupon_bps`, `period_secs`, `start_ts`, `record_offset_secs`, `num_periods`, `factor_bps` (текущий номинальный фактор, 10 000 = 100%), `supply`, `status`, `action_count` |
-| `Holder` (по `bond` + кошелёк) | `allowed`, `balance_mirror`, `checkpoints: [(action_id, balance)]` (короткий кольцевой буфер) , `last_seen_action` |
+| `Holder` (по `bond` + кошелёк; владелец — `pritok_registry`) | `allowed`, `balance_mirror`, `checkpoints: [(from_action, to_action, balance)]` (короткий кольцевой буфер), `last_seen_action` |
 | `Action` (по `bond` + id) | `kind` (Coupon / PartialRedemption / Maturity), `record_ts`, `pay_ts`, `amount_per_unit`, `settlement_mode` (Onchain / Bank), `required`, `funded`, `paid`, `status` (Scheduled / Funded / Paying / Paid / Defaulted), `payout_ratio_bps` (при дефолте) |
 | `PaymentVault` | ATA `payment_mint`, владелец — PDA `Bond`; снять может только программа |
 | `Claim` (по `action` + держатель) | `entitled`, `paid`, `mode`, `bank_ref_hash` — квитанция и защита от двойной выплаты |
@@ -123,7 +132,14 @@ PRITOK — **реестр и платёжный агент в одной про�
 
 Право на событие N = контрольная точка N, если она есть, иначе текущий `balance_mirror` (держатель с отсечки не двигал баланс).
 
-Итог: без заморозки переводов, без офчейн-снимков, O(1) на перевод, всё проверяемо onchain. Размещение и погашение (mint/burn через программу) обновляют `Holder` напрямую тем же правилом.
+Итог: без заморозки переводов, без офчейн-снимков, O(1) на перевод, всё проверяемо onchain. Размещение и погашение (mint/burn через программу) обновляют `Holder` через CPI `sync_holder` тем же правилом.
+
+Детали, которые надо соблюсти:
+
+- **Hook не может создавать аккаунты** (подпись отправителя в hook понижена, плательщика нет). `Holder` создаётся заранее в `allow_holder`; перевод на кошелёк без `Holder` падает — это и есть проверка допуска.
+- **Hook знает даты отсечки из `Bond`**: плановые вычисляются из `start_ts + k·period_secs − record_offset_secs`, внеплановые (частичное погашение) хранятся списком в `Bond`. `Bond` передаётся hook-у как extra account (только чтение).
+- **Несколько отсечек без движения баланса** покрываются одной записью-диапазоном `(from_action, to_action, balance)`, а не отдельной точкой на каждое событие, иначе кольцевой буфер переполнится у держателя, который долго не забирает выплаты.
+- **Держатель может сам сжечь свои облигации** (burn в Token-2022 hook не вызывает). Тогда `balance_mirror` завышен. При `claim` сверяем `balance_mirror` с реальным балансом токена и досинхронизируем вниз. Экономически это безопасно: сжечь номинал 100 000 ради купона 8 000 невыгодно, а сумма выплаты была профинансирована под старое предложение. Описать в README как известное ограничение.
 
 Альтернатива, которую **не** берём: заморозка на отсечке + офчейн-снимок + Merkle root (так сделано в [Owed](https://github.com/thesithunyein/owed)) — слабее по проверяемости onchain.
 
@@ -189,7 +205,7 @@ PRITOK — **реестр и платёжный агент в одной про�
 
 | Приоритет | Работа | Дни |
 |---|---|---|
-| Обязательно | Anchor-программа: `Bond`, `Holder`, `Action`, transfer hook с контрольными точками, купон, частичное погашение, погашение, дефолт + тесты сценария | 3 |
+| Обязательно | Anchor-программы `pritok_registry` (hook, `Holder`, контрольные точки) и `pritok` (`Bond`, `Action`, купон, частичное погашение, погашение, дефолт) + тесты сценария | 3 |
 | Обязательно | Банковский путь (`Claim` в режиме Bank, `confirm_bank_payment`) | 0.5 |
 | Обязательно | tKZT, деплой в devnet, скрипт полного сценария «СтепьЛогистик» | 0.5 |
 | Обязательно | Интерфейс: публичный реестр → эмитент → инвестор → оператор | 2 |
