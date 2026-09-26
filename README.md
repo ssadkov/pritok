@@ -1,6 +1,6 @@
-# Tirkeu
+# PRITOK
 
-Corporate actions for tokenized bonds on Solana: holder registry, record dates,
+Bond registry and payouts on Solana ("pritok" — "inflow" in Russian). Corporate actions for tokenized bonds: holder registry, record dates,
 entitlement calculation, coupon payments, partial redemption and maturity —
 with onchain (stablecoin) or bank settlement.
 
