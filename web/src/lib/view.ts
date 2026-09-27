@@ -49,7 +49,17 @@ export interface OpView {
   ok: boolean;
 }
 
+export interface DemoInfo {
+  enabled: boolean;
+  issuer?: string;
+  operator?: string;
+  investors?: { key: "aigerim" | "bolat" | "fund"; address: string; tkzt: number }[];
+  issuerTkzt?: number;
+}
+
 export interface BondView {
+  demo?: DemoInfo;
+  stale?: boolean;
   cluster: string;
   program: string;
   bond: string;

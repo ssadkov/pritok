@@ -1,0 +1,129 @@
+// Server-only demo signing: devnet role keys from client/.keys sign on behalf of
+// the UI's role switcher. Enabled only with DEMO_SIGNING=1 and never for mainnet.
+import { AnchorProvider, Wallet } from "@coral-xyz/anchor";
+import { getAssociatedTokenAddressSync } from "@solana/spl-token";
+import { Connection, Keypair, PublicKey } from "@solana/web3.js";
+import fs from "node:fs";
+import path from "node:path";
+import { BondClient, makeProgram } from "./pritok-client";
+import { KIND, type BondView, type DemoInfo } from "./view";
+
+const RPC = process.env.RPC_URL ?? "https://api.devnet.solana.com";
+const CLUSTER = process.env.NEXT_PUBLIC_CLUSTER ?? "devnet";
+const KEYS_DIR = process.env.KEYS_DIR ?? path.resolve(process.cwd(), "../client/.keys");
+
+export const INVESTORS = ["aigerim", "bolat", "fund"] as const;
+export type Investor = (typeof INVESTORS)[number];
+
+export const demoEnabled = () => process.env.DEMO_SIGNING === "1" && CLUSTER !== "mainnet-beta";
+
+function key(name: string) {
+  const file = path.join(KEYS_DIR, `${name}.json`);
+  return Keypair.fromSecretKey(Uint8Array.from(JSON.parse(fs.readFileSync(file, "utf8"))));
+}
+
+let cached: { conn: Connection; keys: Record<string, Keypair> } | null = null;
+function ctx() {
+  if (!cached) {
+    const names = ["payer", "issuer", "operator", ...INVESTORS];
+    cached = {
+      conn: new Connection(RPC, "confirmed"),
+      keys: Object.fromEntries(names.map((n) => [n, key(n)])),
+    };
+  }
+  return cached;
+}
+
+/** Actor addresses and their tKZT balances for the role screens. */
+export async function demoInfo(bond: BondView): Promise<DemoInfo> {
+  if (!demoEnabled()) return { enabled: false };
+  const { conn, keys } = ctx();
+  const mint = new PublicKey(bond.paymentMint);
+  const owners = [keys.issuer, ...INVESTORS.map((i) => keys[i])].map((k) => k.publicKey);
+  const atas = owners.map((o) => getAssociatedTokenAddressSync(mint, o, true));
+  const infos = await conn.getMultipleAccountsInfo(atas);
+  // SPL token account: amount is a u64 at offset 64.
+  const bal = infos.map((i) => (i ? Number(i.data.readBigUInt64LE(64)) : 0));
+  return {
+    enabled: bond.issuer === keys.issuer.publicKey.toBase58(),
+    issuer: keys.issuer.publicKey.toBase58(),
+    operator: keys.operator.publicKey.toBase58(),
+    issuerTkzt: bal[0],
+    investors: INVESTORS.map((k, i) => ({ key: k, address: keys[k].publicKey.toBase58(), tkzt: bal[i + 1] })),
+  };
+}
+
+export type Action =
+  | { type: "fund"; actionId: number; amount: number }
+  | { type: "markDefault"; actionId: number }
+  | { type: "declarePartialRedemption"; couponActionId: number; bps: number }
+  | { type: "subscribe"; who: Investor; units: number }
+  | { type: "transfer"; who: Investor; to: string; units: number }
+  | { type: "claim"; who: Investor; actionId: number }
+  | { type: "redeem"; who: Investor }
+  | { type: "allow"; owner: string };
+
+export async function perform(bond: BondView, a: Action): Promise<string> {
+  const { conn, keys } = ctx();
+  const provider = new AnchorProvider(conn, new Wallet(keys.payer), { commitment: "confirmed" });
+  const program = makeProgram(provider);
+  const issuer = keys.issuer;
+  const bondId = (await program.account.bond.fetch(new PublicKey(bond.bond))).bondId;
+  const c = new BondClient(program, issuer.publicKey, BigInt(bondId.toString()), new PublicKey(bond.paymentMint));
+  if (c.bond.toBase58() !== bond.bond) throw new Error("Этот выпуск создан не демо-эмитентом");
+  const inv = (who: Investor) => {
+    if (!INVESTORS.includes(who)) throw new Error("Неизвестный инвестор");
+    return keys[who];
+  };
+
+  switch (a.type) {
+    case "fund":
+      return c.fund(issuer, a.actionId, BigInt(Math.round(a.amount)));
+    case "markDefault":
+      return c.markDefault(a.actionId);
+    case "declarePartialRedemption":
+      return c.declarePartialRedemption(issuer, a.couponActionId, a.bps);
+    case "subscribe":
+      return c.subscribe(inv(a.who), a.units);
+    case "transfer":
+      return c.transfer(inv(a.who), new PublicKey(a.to), a.units);
+    case "claim":
+      return c.claim(inv(a.who), a.actionId);
+    case "redeem": {
+      const maturity = bond.events.find((e) => e.kind === KIND.MATURITY)!;
+      const coupon = bond.events.find((e) => e.kind === KIND.COUPON && e.payTs === maturity.payTs)!;
+      return c.redeem(inv(a.who), maturity.actionId, coupon.actionId);
+    }
+    case "allow":
+      return c.allowHolder(keys.operator, new PublicKey(a.owner));
+  }
+}
+
+const ERRORS: Record<string, string> = {
+  NotFunded: "Событие профинансировано не полностью — выплаты закрыты",
+  NotPayable: "Дата выплаты ещё не наступила",
+  OverFunding: "Сумма больше, чем осталось внести",
+  CannotDefault: "Дефолт можно зафиксировать только после даты выплаты при нехватке денег",
+  NothingToPay: "На дату фиксации у держателя не было облигаций",
+  RecordDatePassed: "Дата фиксации этого купона уже прошла",
+  TransfersClosed: "После даты фиксации погашения переводы закрыты",
+  HolderNotAllowed: "Получатель не допущен регистратором",
+  InsufficientBalance: "Недостаточно облигаций",
+  SubscriptionClosed: "Подписка закрыта",
+  SubscriptionOpen: "Подписка ещё идёт",
+  InvalidRedemption: "Недопустимая доля амортизации",
+  TooManyEvents: "Достигнут лимит событий выпуска",
+  WrongActionKind: "Для этого события нужна другая операция",
+  SelfTransfer: "Нельзя перевести самому себе",
+  BankSettlement: "Событие проводится через банк",
+};
+
+/** Anchor/RPC error → short Russian message; a repeated claim shows as "already in use". */
+export function explain(e: unknown) {
+  const text = String((e as Error)?.message ?? e) + JSON.stringify((e as { logs?: string[] })?.logs ?? []);
+  const code = text.match(/Error Code: (\w+)/)?.[1];
+  if (code && ERRORS[code]) return ERRORS[code];
+  if (/already in use/.test(text)) return "Эта выплата уже получена";
+  if (code) return code;
+  return text.slice(0, 200);
+}

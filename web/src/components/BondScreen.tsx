@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { InvestorPanel, IssuerPanel, OperatorPanel, Toast, useAct, type Role } from "./RolePanels";
 import { DEFAULT_BOND, ISSUER_NAME, colorFor, label } from "@/lib/demo";
 import {
   KIND,
@@ -28,6 +29,8 @@ function useBond(address: string) {
   const [bond, setBond] = useState<BondView | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [fetchedAt, setFetchedAt] = useState(0);
+  const [nonce, setNonce] = useState(0);
+  const reload = useCallback(() => setNonce((n) => n + 1), []);
   useEffect(() => {
     let alive = true;
     const load = async () => {
@@ -49,8 +52,8 @@ function useBond(address: string) {
       alive = false;
       clearInterval(t);
     };
-  }, [address]);
-  return { bond, error, fetchedAt };
+  }, [address, nonce]);
+  return { bond, error, fetchedAt, reload };
 }
 
 /** Chain time advanced locally between polls, so countdowns tick every second. */
@@ -66,14 +69,41 @@ function useNow(bond: BondView | null, fetchedAt: number) {
 }
 
 export function BondScreen({ address }: { address: string }) {
-  const { bond, error, fetchedAt } = useBond(address);
+  const { bond, error, fetchedAt, reload } = useBond(address);
   const now = useNow(bond, fetchedAt);
   const [selected, setSelected] = useState<number | null>(null);
+  const [role, setRoleState] = useState<Role>("public");
+  const [who, setWhoState] = useState<"aigerim" | "bolat" | "fund">("aigerim");
+  const a = useAct(address, reload);
+
+  // Role and investor live in the URL (?as=investor&who=bolat) so a view can be shared.
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search);
+    const r = q.get("as");
+    if (r === "issuer" || r === "operator" || r === "investor") setRoleState(r);
+    const w = q.get("who");
+    if (w === "aigerim" || w === "bolat" || w === "fund") setWhoState(w);
+  }, []);
+  const syncUrl = (r: Role, w: string) => {
+    const q = new URLSearchParams();
+    if (r !== "public") q.set("as", r);
+    if (r === "investor") q.set("who", w);
+    const qs = q.toString();
+    window.history.replaceState(null, "", window.location.pathname + (qs ? "?" + qs : ""));
+  };
+  const setRole = (r: Role) => {
+    setRoleState(r);
+    syncUrl(r, who);
+  };
+  const setWho = (w: "aigerim" | "bolat" | "fund") => {
+    setWhoState(w);
+    syncUrl(role, w);
+  };
 
   if (!bond) {
     return (
       <>
-        <TopBar bond={null} now={0} stale={!!error} />
+        <TopBar bond={null} now={0} stale={!!error} role="public" setRole={() => {}} />
         <main className="wrap">
           <div className="card card-b empty">{error ? `Не удалось загрузить выпуск: ${error}` : "Загружаем выпуск из devnet…"}</div>
         </main>
@@ -81,20 +111,33 @@ export function BondScreen({ address }: { address: string }) {
     );
   }
 
+  const demo = !!bond.demo?.enabled;
   const defaultPos = pickDefaultEvent(bond);
   const pos = selected ?? defaultPos;
 
   return (
     <>
-      <TopBar bond={bond} now={now} stale={!!error || !!(bond as BondView & { stale?: boolean }).stale} />
+      <TopBar bond={bond} now={now} stale={!!error || !!bond.stale} role={demo ? role : "public"} setRole={setRole} />
       <main className="wrap">
         <BondHeader bond={bond} />
+        {demo && role === "issuer" && <IssuerPanel bond={bond} a={a} />}
+        {demo && role === "investor" && <InvestorPanel bond={bond} a={a} who={who} setWho={setWho} />}
+        {demo && role === "operator" && <OperatorPanel bond={bond} a={a} />}
         <Timeline bond={bond} now={now} selected={pos} onSelect={setSelected} />
         <div className="grid2">
           <EventsTable bond={bond} selected={pos} onSelect={setSelected} />
           <aside className="card calc" aria-live="polite">
             <div className="card-b">
-              <CalcPanel bond={bond} event={bond.events[pos]} />
+              <CalcPanel
+                bond={bond}
+                event={bond.events[pos]}
+                busy={!!a.busy}
+                onDefault={
+                  demo
+                    ? (actionId) => a.act("default-" + actionId, "Технический дефолт зафиксирован", { type: "markDefault", actionId })
+                    : undefined
+                }
+              />
             </div>
           </aside>
         </div>
@@ -110,6 +153,7 @@ export function BondScreen({ address }: { address: string }) {
           </span>
         </footer>
       </main>
+      <Toast bond={bond} a={a} />
     </>
   );
 }
@@ -138,7 +182,27 @@ function mmss(sec: number) {
   return `${String(m).padStart(2, "0")}:${String(sec % 60).padStart(2, "0")}`;
 }
 
-function TopBar({ bond, now, stale }: { bond: BondView | null; now: number; stale: boolean }) {
+const ROLES: [Role, string][] = [
+  ["public", "Публика"],
+  ["issuer", "Эмитент"],
+  ["operator", "Регистратор"],
+  ["investor", "Инвестор"],
+];
+
+function TopBar({
+  bond,
+  now,
+  stale,
+  role,
+  setRole,
+}: {
+  bond: BondView | null;
+  now: number;
+  stale: boolean;
+  role: Role;
+  setRole: (r: Role) => void;
+}) {
+  const demo = !!bond?.demo?.enabled;
   const next = bond ? nextMilestone(bond, now) : undefined;
   return (
     <header className="top">
@@ -150,10 +214,17 @@ function TopBar({ bond, now, stale }: { bond: BondView | null; now: number; stal
         <div className="role">
           <span className="seg-label">Смотреть как</span>
           <div className="seg" role="group" aria-label="Роль">
-            <button aria-pressed="true">Публика</button>
-            <button aria-pressed="false" disabled title="Скоро">Эмитент</button>
-            <button aria-pressed="false" disabled title="Скоро">Регистратор</button>
-            <button aria-pressed="false" disabled title="Скоро">Инвестор</button>
+            {ROLES.map(([r, name]) => (
+              <button
+                key={r}
+                aria-pressed={role === r}
+                disabled={r !== "public" && !demo}
+                title={r !== "public" && !demo ? "Действия доступны только в демо-выпуске" : undefined}
+                onClick={() => setRole(r)}
+              >
+                {name}
+              </button>
+            ))}
           </div>
         </div>
         <div className="spacer" />
@@ -378,7 +449,17 @@ function EventsTable({ bond, selected, onSelect }: { bond: BondView; selected: n
 
 // ------------------------------------------------------------------ calculation
 
-function CalcPanel({ bond, event: e }: { bond: BondView; event: EventView }) {
+function CalcPanel({
+  bond,
+  event: e,
+  onDefault,
+  busy,
+}: {
+  bond: BondView;
+  event: EventView;
+  onDefault?: (actionId: number) => void;
+  busy?: boolean;
+}) {
   const st = uiStatus(bond, e);
   const recorded = e.recordTs <= bond.now;
   const rows = bond.holders
@@ -436,6 +517,11 @@ function CalcPanel({ bond, event: e }: { bond: BondView; event: EventView }) {
         <span>{money(total)} ₸</span>
       </div>
       <div className={`note${st === "default" || st === "overdue" ? " red" : ""}`}>{note}</div>
+      {st === "overdue" && onDefault && (
+        <button className="btn danger" style={{ marginTop: 12 }} disabled={busy} onClick={() => onDefault(e.actionId)}>
+          Зафиксировать дефолт
+        </button>
+      )}
     </>
   );
 }

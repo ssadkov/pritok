@@ -87,6 +87,11 @@ const viewCache = new Map<string, { at: number; view: Promise<BondView> }>();
 
 const lastGood = new Map<string, BondView>();
 
+/** Drops the short-lived cache so the next read reflects a just-sent transaction. */
+export function invalidate(address: string) {
+  viewCache.delete(address);
+}
+
 /** Returns fresh data, or the last successful read (marked stale) when the RPC is rate-limited. */
 export async function loadBond(address: string): Promise<BondView & { stale?: boolean }> {
   const hit = viewCache.get(address);

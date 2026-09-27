@@ -6,10 +6,11 @@
     "build": "next build",
     "start": "next start -p 3100",
     "typecheck": "tsc --noEmit",
-    "sync-idl": "node -e \"for (const f of ['pritok.json','pritok.ts']) require('fs').copyFileSync('../client/idl/'+f,'src/idl/'+f)\""
+    "sync": "node scripts/sync.mjs"
   },
   "dependencies": {
     "@coral-xyz/anchor": "0.32.1",
+    "@solana/spl-token": "^0.4.15",
     "@solana/web3.js": "^1.98.0",
     "next": "^15.5.0",
     "react": "^19.1.0",

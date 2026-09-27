@@ -20,6 +20,8 @@ const OUT = path.resolve(import.meta.dirname, "../out");
 // Accelerated calendar: one "half-year" = PERIOD seconds.
 const PERIOD = Number(process.env.PERIOD ?? 150);
 const RECORD_OFFSET = 25;
+// MODE=setup stops after placement and leaves every corporate action to the web UI.
+const SETUP_ONLY = process.env.MODE === "setup";
 const FACE = 10_000_000n; // 100 000.00 tKZT (2 decimals)
 const COUPON_BPS = 1_600;
 const ISSUE = { aigerim: 300, bolat: 200, fund: 500 };
@@ -157,6 +159,12 @@ async function main() {
   await waitUntil(params.subscriptionEndTs, "subscription end");
   await step("subscription closed", () => c.closeSubscription(), "issued_units fixed at 1 000");
 
+  if (SETUP_ONLY) {
+    writeOut(program.programId, c, tkzt, actors, bondId);
+    console.log(`\nsetup done — open /bond/${c.bond} and continue from the UI`);
+    return;
+  }
+
   const bond0 = await c.fetchBond();
   const ev = (id: number) => bond0.events.find((e) => e.actionId === id)!;
   const [C1, C2, C3, C4, MAT] = [0, 1, 2, 3, 4];
@@ -212,16 +220,21 @@ async function main() {
     console.log(`  #${e.actionId} ${k.padEnd(18)} per unit ${Number(e.amountPerUnit) / 100} funded ${Number(e.funded) / 100} claimed ${Number(e.claimed) / 100}`);
   }
 
+  writeOut(program.programId, c, tkzt, actors, bondId);
+}
+
+function writeOut(programId: PublicKey, c: BondClient, tkzt: PublicKey, actors: Record<string, Keypair>, bondId: bigint) {
   fs.mkdirSync(OUT, { recursive: true });
-  const out = path.join(OUT, `scenario-${bondId}.json`);
+  const out = path.join(OUT, `${SETUP_ONLY ? "setup" : "scenario"}-${bondId}.json`);
   fs.writeFileSync(
     out,
     JSON.stringify(
       {
-        program: program.programId.toBase58(),
+        program: programId.toBase58(),
         bond: c.bond.toBase58(),
         bondMint: c.bondMint.toBase58(),
         tkzt: tkzt.toBase58(),
+        periodSecs: PERIOD,
         actors: Object.fromEntries(Object.entries(actors).map(([k, v]) => [k, v.publicKey.toBase58()])),
         steps: log.map((s) => ({ ...s, url: s.sig ? explorer(s.sig) : undefined })),
       },
