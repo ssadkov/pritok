@@ -1,0 +1,19 @@
+{
+  "name": "pritok-client",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "scenario": "tsx src/scenario.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@coral-xyz/anchor": "0.32.1",
+    "@solana/spl-token": "^0.4.13",
+    "@solana/web3.js": "^1.98.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0"
+  }
+}

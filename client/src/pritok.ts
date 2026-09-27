@@ -1,0 +1,249 @@
+// Thin client for the pritok program: PDAs, account sets and one call per instruction.
+import { AnchorProvider, BN, Program } from "@coral-xyz/anchor";
+import {
+  ASSOCIATED_TOKEN_PROGRAM_ID,
+  TOKEN_2022_PROGRAM_ID,
+  TOKEN_PROGRAM_ID,
+  getAssociatedTokenAddressSync,
+} from "@solana/spl-token";
+import { Keypair, PublicKey, SystemProgram } from "@solana/web3.js";
+import idl from "../idl/pritok.json" with { type: "json" };
+import type { Pritok } from "../idl/pritok";
+
+export const PROGRAM_ID = new PublicKey(idl.address);
+
+export const kind = { COUPON: 0, PARTIAL_REDEMPTION: 1, MATURITY: 2 } as const;
+export const eventStatus = { SCHEDULED: 0, FUNDED: 1, DEFAULTED: 2 } as const;
+
+const pda = (seeds: (Buffer | Uint8Array)[]) => PublicKey.findProgramAddressSync(seeds, PROGRAM_ID)[0];
+
+export const configPda = () => pda([Buffer.from("config")]);
+export const bondPda = (issuer: PublicKey, bondId: bigint) => {
+  const id = Buffer.alloc(8);
+  id.writeBigUInt64LE(bondId);
+  return pda([Buffer.from("bond"), issuer.toBuffer(), id]);
+};
+export const mintPda = (bond: PublicKey) => pda([Buffer.from("mint"), bond.toBuffer()]);
+export const holderPda = (bond: PublicKey, owner: PublicKey) =>
+  pda([Buffer.from("holder"), bond.toBuffer(), owner.toBuffer()]);
+export const claimPda = (bond: PublicKey, actionId: number, owner: PublicKey) =>
+  pda([Buffer.from("claim"), bond.toBuffer(), Buffer.from([actionId]), owner.toBuffer()]);
+
+export const bondAta = (owner: PublicKey, bondMint: PublicKey) =>
+  getAssociatedTokenAddressSync(bondMint, owner, true, TOKEN_2022_PROGRAM_ID);
+export const payAta = (owner: PublicKey, paymentMint: PublicKey) =>
+  getAssociatedTokenAddressSync(paymentMint, owner, true, TOKEN_PROGRAM_ID);
+
+export interface BondParams {
+  bondId: bigint;
+  faceValue: bigint;
+  couponBps: number;
+  periodSecs: number;
+  startTs: number;
+  recordOffsetSecs: number;
+  numPeriods: number;
+  subscriptionEndTs: number;
+}
+
+/** One bond issue: addresses plus a call per instruction. Every call returns the signature. */
+export class BondClient {
+  readonly bond: PublicKey;
+  readonly bondMint: PublicKey;
+  readonly vault: PublicKey;
+
+  constructor(
+    readonly program: Program<Pritok>,
+    readonly issuer: PublicKey,
+    readonly bondId: bigint,
+    readonly paymentMint: PublicKey,
+  ) {
+    this.bond = bondPda(issuer, bondId);
+    this.bondMint = mintPda(this.bond);
+    this.vault = payAta(this.bond, paymentMint);
+  }
+
+  static async initConfig(program: Program<Pritok>, operator: Keypair, paymentMints: PublicKey[]) {
+    return program.methods
+      .initConfig(paymentMints)
+      .accountsPartial({ operator: operator.publicKey, config: configPda(), systemProgram: SystemProgram.programId })
+      .signers([operator])
+      .rpc();
+  }
+
+  async createBond(issuer: Keypair, p: BondParams) {
+    return this.program.methods
+      .createBond({
+        bondId: new BN(p.bondId.toString()),
+        faceValue: new BN(p.faceValue.toString()),
+        couponBps: p.couponBps,
+        periodSecs: new BN(p.periodSecs),
+        startTs: new BN(p.startTs),
+        recordOffsetSecs: new BN(p.recordOffsetSecs),
+        numPeriods: p.numPeriods,
+        subscriptionEndTs: new BN(p.subscriptionEndTs),
+      })
+      .accountsPartial({
+        issuer: issuer.publicKey,
+        config: configPda(),
+        bond: this.bond,
+        bondMint: this.bondMint,
+        paymentMint: this.paymentMint,
+        vault: this.vault,
+        bondTokenProgram: TOKEN_2022_PROGRAM_ID,
+        paymentTokenProgram: TOKEN_PROGRAM_ID,
+        associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+        systemProgram: SystemProgram.programId,
+      })
+      .signers([issuer])
+      .rpc();
+  }
+
+  async allowHolder(operator: Keypair, owner: PublicKey) {
+    return this.program.methods
+      .allowHolder()
+      .accountsPartial({
+        operator: operator.publicKey,
+        config: configPda(),
+        bond: this.bond,
+        owner,
+        holder: holderPda(this.bond, owner),
+        systemProgram: SystemProgram.programId,
+      })
+      .signers([operator])
+      .rpc();
+  }
+
+  async subscribe(investor: Keypair, units: number) {
+    return this.program.methods
+      .subscribe(new BN(units))
+      .accountsPartial({
+        investor: investor.publicKey,
+        config: configPda(),
+        bond: this.bond,
+        issuer: this.issuer,
+        holder: holderPda(this.bond, investor.publicKey),
+        bondMint: this.bondMint,
+        investorBondAta: bondAta(investor.publicKey, this.bondMint),
+        paymentMint: this.paymentMint,
+        investorPayment: payAta(investor.publicKey, this.paymentMint),
+        issuerPayment: payAta(this.issuer, this.paymentMint),
+        bondTokenProgram: TOKEN_2022_PROGRAM_ID,
+        paymentTokenProgram: TOKEN_PROGRAM_ID,
+        associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+        systemProgram: SystemProgram.programId,
+      })
+      .signers([investor])
+      .rpc();
+  }
+
+  async closeSubscription() {
+    return this.program.methods.closeSubscription().accountsPartial({ bond: this.bond }).rpc();
+  }
+
+  async transfer(from: Keypair, to: PublicKey, units: number) {
+    return this.program.methods
+      .transferBond(new BN(units))
+      .accountsPartial({
+        from: from.publicKey,
+        to,
+        config: configPda(),
+        bond: this.bond,
+        fromHolder: holderPda(this.bond, from.publicKey),
+        toHolder: holderPda(this.bond, to),
+        bondMint: this.bondMint,
+        fromAta: bondAta(from.publicKey, this.bondMint),
+        toAta: bondAta(to, this.bondMint),
+        bondTokenProgram: TOKEN_2022_PROGRAM_ID,
+        associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+        systemProgram: SystemProgram.programId,
+      })
+      .signers([from])
+      .rpc();
+  }
+
+  async fund(issuer: Keypair, actionId: number, amount: bigint) {
+    return this.program.methods
+      .fundAction(actionId, new BN(amount.toString()))
+      .accountsPartial({
+        issuer: issuer.publicKey,
+        bond: this.bond,
+        paymentMint: this.paymentMint,
+        issuerPayment: payAta(issuer.publicKey, this.paymentMint),
+        vault: this.vault,
+        paymentTokenProgram: TOKEN_PROGRAM_ID,
+      })
+      .signers([issuer])
+      .rpc();
+  }
+
+  async markDefault(actionId: number) {
+    return this.program.methods.markDefault(actionId).accountsPartial({ bond: this.bond }).rpc();
+  }
+
+  async claim(owner: Keypair, actionId: number) {
+    return this.program.methods
+      .claim(actionId)
+      .accountsPartial({
+        owner: owner.publicKey,
+        bond: this.bond,
+        holder: holderPda(this.bond, owner.publicKey),
+        claim: claimPda(this.bond, actionId, owner.publicKey),
+        paymentMint: this.paymentMint,
+        vault: this.vault,
+        ownerPayment: payAta(owner.publicKey, this.paymentMint),
+        paymentTokenProgram: TOKEN_PROGRAM_ID,
+        systemProgram: SystemProgram.programId,
+      })
+      .signers([owner])
+      .rpc();
+  }
+
+  async declarePartialRedemption(issuer: Keypair, couponActionId: number, redeemBps: number) {
+    return this.program.methods
+      .declarePartialRedemption(couponActionId, redeemBps)
+      .accountsPartial({
+        issuer: issuer.publicKey,
+        bond: this.bond,
+        paymentMint: this.paymentMint,
+        issuerPayment: payAta(issuer.publicKey, this.paymentMint),
+        vault: this.vault,
+        paymentTokenProgram: TOKEN_PROGRAM_ID,
+      })
+      .signers([issuer])
+      .rpc();
+  }
+
+  async redeem(owner: Keypair, maturityActionId: number, couponActionId: number) {
+    return this.program.methods
+      .redeem(maturityActionId, couponActionId)
+      .accountsPartial({
+        owner: owner.publicKey,
+        bond: this.bond,
+        holder: holderPda(this.bond, owner.publicKey),
+        maturityClaim: claimPda(this.bond, maturityActionId, owner.publicKey),
+        couponClaim: claimPda(this.bond, couponActionId, owner.publicKey),
+        bondMint: this.bondMint,
+        ownerBondAta: bondAta(owner.publicKey, this.bondMint),
+        paymentMint: this.paymentMint,
+        vault: this.vault,
+        ownerPayment: payAta(owner.publicKey, this.paymentMint),
+        bondTokenProgram: TOKEN_2022_PROGRAM_ID,
+        paymentTokenProgram: TOKEN_PROGRAM_ID,
+        systemProgram: SystemProgram.programId,
+      })
+      .signers([owner])
+      .rpc();
+  }
+
+  fetchBond() {
+    return this.program.account.bond.fetch(this.bond);
+  }
+
+  fetchHolder(owner: PublicKey) {
+    return this.program.account.holder.fetch(holderPda(this.bond, owner));
+  }
+}
+
+export function makeProgram(provider: AnchorProvider) {
+  return new Program<Pritok>(idl as Pritok, provider);
+}
