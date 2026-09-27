@@ -14,6 +14,7 @@ use anchor_spl::{
     token::spl_token,
     token_2022::spl_token_2022,
 };
+use anchor_lang::solana_program::program_pack::Pack;
 use litesvm::LiteSVM;
 use pritok::state::{Bond, Holder};
 use solana_keypair::Keypair;
@@ -26,6 +27,16 @@ const RECORD_OFFSET: i64 = 30;
 const SUB_END: i64 = T0 + 100;
 const FACE: u64 = 10_000_000; // 100 000.00 tKZT
 const BOND_ID: u64 = 1;
+const ISSUER_TKZT: u64 = 1_000_000_000_000_000;
+const COUPON: u64 = 800_000; // 8 000.00 per bond
+
+// Action ids created by create_bond: coupons 0..=3, maturity 4; the first ad-hoc action gets 5.
+const C1: u8 = 0;
+const C2: u8 = 1;
+const C3: u8 = 2;
+const C4: u8 = 3;
+const MAT: u8 = 4;
+const PR: u8 = 5;
 
 struct Env {
     svm: LiteSVM,
@@ -97,6 +108,7 @@ fn setup() -> Env {
             system_instruction::create_account(&operator.pubkey(), &tkzt, rent, 82, &spl_token::ID),
             spl_token::instruction::initialize_mint2(&spl_token::ID, &tkzt, &operator.pubkey(), None, 2).unwrap(),
             create_associated_token_account(&operator.pubkey(), &issuer.pubkey(), &tkzt, &spl_token::ID),
+            spl_token::instruction::mint_to(&spl_token::ID, &tkzt, &tkzt_ata(&issuer.pubkey(), &tkzt), &operator.pubkey(), &[], ISSUER_TKZT).unwrap(),
         ],
         &operator,
         &[&tkzt_kp],
@@ -137,7 +149,10 @@ fn setup() -> Env {
                 bond,
                 bond_mint,
                 payment_mint: tkzt,
+                vault: tkzt_ata(&bond, &tkzt),
                 bond_token_program: spl_token_2022::ID,
+                payment_token_program: spl_token::ID,
+                associated_token_program: anchor_spl::associated_token::ID,
                 system_program: anchor_lang::system_program::ID,
             }
             .to_account_metas(None),
@@ -257,6 +272,137 @@ impl Env {
         };
         let op = self.operator.insecure_clone();
         send(&mut self.svm, &[ix], &op, &[])
+    }
+
+    fn vault(&self) -> Pubkey {
+        tkzt_ata(&self.bond, &self.tkzt)
+    }
+
+    fn fund(&mut self, action_id: u8, amount: u64) -> Result<(), String> {
+        let issuer = self.issuer.insecure_clone();
+        let ix = Instruction {
+            program_id: pritok::ID,
+            accounts: pritok::accounts::FundAction {
+                issuer: issuer.pubkey(),
+                bond: self.bond,
+                payment_mint: self.tkzt,
+                issuer_payment: tkzt_ata(&issuer.pubkey(), &self.tkzt),
+                vault: self.vault(),
+                payment_token_program: spl_token::ID,
+            }
+            .to_account_metas(None),
+            data: pritok::instruction::FundAction { action_id, amount }.data(),
+        };
+        send(&mut self.svm, &[ix], &issuer, &[])
+    }
+
+    fn mark_default(&mut self, action_id: u8) -> Result<(), String> {
+        let ix = Instruction {
+            program_id: pritok::ID,
+            accounts: pritok::accounts::MarkDefault { bond: self.bond }.to_account_metas(None),
+            data: pritok::instruction::MarkDefault { action_id }.data(),
+        };
+        let op = self.operator.insecure_clone();
+        send(&mut self.svm, &[ix], &op, &[])
+    }
+
+    fn claim_pda(&self, action_id: u8, owner: &Pubkey) -> Pubkey {
+        Pubkey::find_program_address(&[b"claim", self.bond.as_ref(), &[action_id], owner.as_ref()], &pritok::ID).0
+    }
+
+    fn claim(&mut self, owner: &Keypair, action_id: u8) -> Result<(), String> {
+        let ix = Instruction {
+            program_id: pritok::ID,
+            accounts: pritok::accounts::ClaimPayout {
+                owner: owner.pubkey(),
+                bond: self.bond,
+                holder: holder_pda(&self.bond, &owner.pubkey()),
+                claim: self.claim_pda(action_id, &owner.pubkey()),
+                payment_mint: self.tkzt,
+                vault: self.vault(),
+                owner_payment: tkzt_ata(&owner.pubkey(), &self.tkzt),
+                payment_token_program: spl_token::ID,
+                system_program: anchor_lang::system_program::ID,
+            }
+            .to_account_metas(None),
+            data: pritok::instruction::Claim { action_id }.data(),
+        };
+        send(&mut self.svm, &[ix], owner, &[])
+    }
+
+    fn declare_pr(&mut self, coupon_action_id: u8, redeem_bps: u16) -> Result<(), String> {
+        let issuer = self.issuer.insecure_clone();
+        let ix = Instruction {
+            program_id: pritok::ID,
+            accounts: pritok::accounts::DeclarePartialRedemption {
+                issuer: issuer.pubkey(),
+                bond: self.bond,
+                payment_mint: self.tkzt,
+                issuer_payment: tkzt_ata(&issuer.pubkey(), &self.tkzt),
+                vault: self.vault(),
+                payment_token_program: spl_token::ID,
+            }
+            .to_account_metas(None),
+            data: pritok::instruction::DeclarePartialRedemption { coupon_action_id, redeem_bps }.data(),
+        };
+        send(&mut self.svm, &[ix], &issuer, &[])
+    }
+
+    fn redeem(&mut self, owner: &Keypair) -> Result<(), String> {
+        let ix = Instruction {
+            program_id: pritok::ID,
+            accounts: pritok::accounts::Redeem {
+                owner: owner.pubkey(),
+                bond: self.bond,
+                holder: holder_pda(&self.bond, &owner.pubkey()),
+                maturity_claim: self.claim_pda(MAT, &owner.pubkey()),
+                coupon_claim: self.claim_pda(C4, &owner.pubkey()),
+                bond_mint: self.bond_mint,
+                owner_bond_ata: bond_ata(&owner.pubkey(), &self.bond_mint),
+                payment_mint: self.tkzt,
+                vault: self.vault(),
+                owner_payment: tkzt_ata(&owner.pubkey(), &self.tkzt),
+                bond_token_program: spl_token_2022::ID,
+                payment_token_program: spl_token::ID,
+                system_program: anchor_lang::system_program::ID,
+            }
+            .to_account_metas(None),
+            data: pritok::instruction::Redeem { maturity_action_id: MAT, coupon_action_id: C4 }.data(),
+        };
+        send(&mut self.svm, &[ix], owner, &[])
+    }
+
+    fn tkzt_balance(&self, owner: &Pubkey) -> u64 {
+        let acc = self.svm.get_account(&tkzt_ata(owner, &self.tkzt)).unwrap();
+        spl_token::state::Account::unpack(&acc.data).unwrap().amount
+    }
+
+    fn bond_state(&self) -> Bond {
+        read(&self.svm, &self.bond)
+    }
+
+    fn event(&self, action_id: u8) -> pritok::state::Event {
+        let b = self.bond_state();
+        b.events[b.position(action_id).unwrap()]
+    }
+
+    /// Vault balance must equal reserved obligations (no rounding dust with these numbers).
+    fn assert_reserve(&self) {
+        let b = self.bond_state();
+        assert_eq!(self.tkzt_balance(&self.bond), b.reserved, "vault == reserved");
+    }
+
+    /// Standard placement: A 300, B 200, F 500, subscription closed.
+    fn placed(&mut self) -> (Keypair, Keypair, Keypair) {
+        let a = self.investor(1_000 * FACE);
+        let b = self.investor(1_000 * FACE);
+        let f = self.investor(1_000 * FACE);
+        self.subscribe(&a, 300).unwrap();
+        self.subscribe(&b, 200).unwrap();
+        self.subscribe(&f, 500).unwrap();
+        warp(&mut self.svm, SUB_END);
+        self.close_subscription().unwrap();
+        (a, b, f)
     }
 
     fn units_at(&self, owner: &Pubkey, pos: usize, now: i64) -> Option<u64> {
@@ -404,4 +550,148 @@ fn transfer_to_unknown_wallet_fails() {
     env.subscribe(&a, 10).unwrap();
     let stranger = Keypair::new();
     assert!(env.transfer(&a, &stranger.pubkey(), 1).is_err());
+}
+
+fn pay_ts(env: &Env, action_id: u8) -> i64 {
+    env.event(action_id).pay_ts
+}
+
+/// Coupon payout, test 6 (double claim) and test 11 (vault reserve).
+#[test]
+fn t06_coupon_claim_and_no_double_payment() {
+    let mut env = setup();
+    let (a, b, f) = env.placed();
+    let required = COUPON * 1_000;
+
+    assert!(env.fund(C1, required + 1).unwrap_err().contains("OverFunding"));
+    env.fund(C1, required).unwrap();
+    env.assert_reserve();
+    let err = env.claim(&a, C1).unwrap_err();
+    assert!(err.contains("NotPayable"), "{err}");
+
+    let t = pay_ts(&env, C1);
+    warp(&mut env.svm, t);
+    let before = env.tkzt_balance(&a.pubkey());
+    env.claim(&a, C1).unwrap();
+    env.claim(&b, C1).unwrap();
+    env.claim(&f, C1).unwrap();
+    assert_eq!(env.tkzt_balance(&a.pubkey()) - before, 300 * COUPON);
+    assert!(env.claim(&a, C1).is_err(), "double claim must fail");
+
+    assert_eq!(env.event(C1).claimed, required);
+    assert_eq!(env.bond_state().reserved, 0);
+    env.assert_reserve();
+    let err = env.claim(&a, MAT).unwrap_err();
+    assert!(err.contains("WrongActionKind"), "{err}");
+}
+
+/// Default is public and never forgiven: claims open only after the full debt is paid.
+#[test]
+fn default_then_cure() {
+    let mut env = setup();
+    let (a, _b, _f) = env.placed();
+    let required = COUPON * 1_000;
+
+    env.fund(C1, required * 3 / 4).unwrap();
+    let t = pay_ts(&env, C1);
+    warp(&mut env.svm, t);
+    assert!(env.claim(&a, C1).unwrap_err().contains("NotFunded"));
+    env.mark_default(C1).unwrap();
+    assert_eq!(env.event(C1).status, pritok::state::event_status::DEFAULTED);
+    assert!(env.claim(&a, C1).unwrap_err().contains("NotFunded"));
+
+    env.fund(C1, required / 4).unwrap();
+    assert_eq!(env.event(C1).status, pritok::state::event_status::FUNDED);
+    assert!(env.mark_default(C1).is_err(), "funded event cannot default");
+    env.claim(&a, C1).unwrap();
+    env.assert_reserve();
+}
+
+/// Tests 3 and 8: amortization on coupon 2's date, declared after coupon 1's record date,
+/// with a transfer between the two record dates.
+#[test]
+fn t08_partial_redemption_flow() {
+    let mut env = setup();
+    let (a, b, _f) = env.placed();
+
+    let r1 = record_ts(&env, 0);
+    warp(&mut env.svm, r1 + 1);
+    assert!(env.declare_pr(C1, 2_000).unwrap_err().contains("RecordDatePassed"));
+    let issuer_before = env.tkzt_balance(&env.issuer.pubkey());
+    env.declare_pr(C2, 2_000).unwrap();
+    assert_eq!(issuer_before - env.tkzt_balance(&env.issuer.pubkey()), 2_000_000 * 1_000, "funded at declaration");
+    env.assert_reserve();
+
+    assert_eq!(env.bond_state().position(PR), Some(2));
+    assert_eq!(env.event(C2).amount_per_unit, COUPON);
+    assert_eq!(env.event(C3).amount_per_unit, 640_000);
+    assert_eq!(env.event(C4).amount_per_unit, 640_000);
+    assert_eq!(env.event(MAT).amount_per_unit, 8_000_000);
+
+    env.transfer(&a, &b.pubkey(), 50).unwrap(); // between record 1 and record 2
+
+    let t = pay_ts(&env, C2);
+    warp(&mut env.svm, t);
+    env.fund(C1, COUPON * 1_000).unwrap();
+    env.fund(C2, COUPON * 1_000).unwrap();
+    let before = env.tkzt_balance(&a.pubkey());
+    env.claim(&a, C1).unwrap();
+    env.claim(&a, C2).unwrap();
+    env.claim(&a, PR).unwrap();
+    assert_eq!(
+        env.tkzt_balance(&a.pubkey()) - before,
+        300 * COUPON + 250 * COUPON + 250 * 2_000_000
+    );
+    let before_b = env.tkzt_balance(&b.pubkey());
+    env.claim(&b, PR).unwrap();
+    assert_eq!(env.tkzt_balance(&b.pubkey()) - before_b, 250 * 2_000_000);
+    env.assert_reserve();
+}
+
+/// Test 7: some holders redeem before the last coupon is funded; the coupon stays
+/// claimable after their bonds are burned, and required amounts do not shrink.
+#[test]
+fn t07_redeem_then_last_coupon() {
+    let mut env = setup();
+    let (a, b, f) = env.placed();
+
+    let t = pay_ts(&env, MAT);
+    warp(&mut env.svm, t);
+    assert!(env.redeem(&a).unwrap_err().contains("NotFunded"));
+    env.fund(MAT, FACE * 1_000).unwrap();
+
+    // F redeems while coupon 4 is unfunded: principal only.
+    let f0 = env.tkzt_balance(&f.pubkey());
+    env.redeem(&f).unwrap();
+    assert_eq!(env.tkzt_balance(&f.pubkey()) - f0, 500 * FACE);
+    assert_eq!(env.token_balance(&f.pubkey()), 0);
+    assert_eq!(env.bond_state().supply, 500);
+    assert!(env.redeem(&f).is_err(), "second redeem must fail");
+
+    env.fund(C4, COUPON * 1_000).unwrap();
+    assert_eq!(env.event(C4).funded, COUPON * 1_000, "required still counts burned bonds");
+
+    // A redeems: principal and coupon 4 together.
+    let a0 = env.tkzt_balance(&a.pubkey());
+    env.redeem(&a).unwrap();
+    assert_eq!(env.tkzt_balance(&a.pubkey()) - a0, 300 * FACE + 300 * COUPON);
+    assert!(env.claim(&a, C4).is_err(), "coupon 4 already paid in redeem");
+
+    // B claims coupon 4 first, then redeems principal only.
+    env.claim(&b, C4).unwrap();
+    let b0 = env.tkzt_balance(&b.pubkey());
+    env.redeem(&b).unwrap();
+    assert_eq!(env.tkzt_balance(&b.pubkey()) - b0, 200 * FACE);
+
+    // F claims coupon 4 after the burn, from the record-date balance.
+    let f1 = env.tkzt_balance(&f.pubkey());
+    env.claim(&f, C4).unwrap();
+    assert_eq!(env.tkzt_balance(&f.pubkey()) - f1, 500 * COUPON);
+
+    let bond = env.bond_state();
+    assert_eq!(bond.supply, 0);
+    assert_eq!(env.event(MAT).claimed, FACE * 1_000);
+    assert_eq!(env.event(C4).claimed, COUPON * 1_000);
+    assert_eq!(bond.reserved, 0);
+    env.assert_reserve();
 }

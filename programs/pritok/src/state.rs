@@ -59,6 +59,24 @@ pub struct Event {
     pub status: u8,
 }
 
+pub mod claim_status {
+    pub const PAID: u8 = 0;
+}
+
+/// Receipt for one holder's payout on one event; its existence prevents double payment.
+#[account]
+#[derive(InitSpace)]
+pub struct Claim {
+    pub bond: Pubkey,
+    pub owner: Pubkey,
+    pub action_id: u8,
+    pub units: u64,
+    pub amount: u64,
+    pub status: u8,
+    pub bank_ref_hash: [u8; 32],
+    pub bump: u8,
+}
+
 #[account]
 #[derive(InitSpace)]
 pub struct Bond {
@@ -72,7 +90,8 @@ pub struct Bond {
     pub start_ts: i64,
     pub record_offset_secs: i64,
     pub num_periods: u8,
-    /// Current face-value factor (10 000 = 100%).
+    /// Face-value factor after all declared partial redemptions (10 000 = 100%).
+    /// Each event carries the factor it is calculated from in `factor_bps_applied`.
     pub factor_bps: u16,
     pub subscription_end_ts: i64,
     pub subscription_closed: bool,
@@ -93,6 +112,70 @@ pub struct Bond {
 impl Bond {
     pub fn events(&self) -> &[Event] {
         &self.events[..self.events_len as usize]
+    }
+
+    pub fn position(&self, action_id: u8) -> Option<usize> {
+        self.events().iter().position(|e| e.action_id == action_id)
+    }
+
+    /// Fixes `issued_units` once the subscription window has ended.
+    pub fn close_subscription_if_due(&mut self, now: i64) {
+        if !self.subscription_closed && now >= self.subscription_end_ts {
+            self.subscription_closed = true;
+            self.issued_units = self.supply;
+        }
+    }
+
+    pub fn required(&self, event: &Event) -> Option<u64> {
+        event.amount_per_unit.checked_mul(self.issued_units)
+    }
+
+    /// Every event is fully funded, so the issuer owes nothing.
+    pub fn fully_funded(&self) -> bool {
+        self.events()
+            .iter()
+            .all(|e| e.mode == mode::BANK || Some(e.funded) == self.required(e))
+    }
+
+    /// Inserts a partial redemption on the date of the future coupon at `coupon_pos`
+    /// and reduces the face factor of every later coupon and of maturity.
+    /// Returns the new event's position.
+    pub fn insert_partial_redemption(&mut self, coupon_pos: usize, redeem_bps: u16) -> usize {
+        let coupon = self.events[coupon_pos];
+        let pos = coupon_pos + 1;
+        let len = self.events_len as usize;
+        for i in (pos..len).rev() {
+            self.events[i + 1] = self.events[i];
+        }
+        self.events[pos] = Event {
+            action_id: self.next_action_id,
+            kind: kind::PARTIAL_REDEMPTION,
+            record_ts: coupon.record_ts,
+            pay_ts: coupon.pay_ts,
+            factor_bps_applied: redeem_bps,
+            amount_per_unit: self.principal_per_unit(redeem_bps),
+            ..Event::default()
+        };
+        self.events_len += 1;
+        self.next_action_id += 1;
+        self.factor_bps -= redeem_bps;
+        for i in pos + 1..self.events_len as usize {
+            let e = &mut self.events[i];
+            match e.kind {
+                kind::COUPON | kind::MATURITY => {
+                    e.factor_bps_applied -= redeem_bps;
+                }
+                _ => continue,
+            }
+            let factor = e.factor_bps_applied;
+            let amount = if e.kind == kind::COUPON {
+                self.coupon_per_unit(factor)
+            } else {
+                self.principal_per_unit(factor)
+            };
+            self.events[i].amount_per_unit = amount;
+        }
+        pos
     }
 
     pub fn coupon_per_unit(&self, factor_bps: u16) -> u64 {
@@ -271,6 +354,45 @@ mod tests {
         let r2 = b.events[1].record_ts;
         assert_eq!(bo.units_at(&b, 1, r2), Some(200));
         assert_eq!(f.units_at(&b, 1, r2), Some(510));
+    }
+
+    /// Test 8 (logic level): amortization on coupon 2's date reduces only later events.
+    #[test]
+    fn partial_redemption_insertion() {
+        let mut b = bond();
+        let coupon2_id = b.events[1].action_id;
+        let pos = b.insert_partial_redemption(1, 2_000);
+        assert_eq!(pos, 2);
+        assert_eq!(b.events_len, 6);
+        let pr = b.events[2];
+        assert_eq!(pr.kind, kind::PARTIAL_REDEMPTION);
+        assert_eq!(pr.record_ts, b.events[1].record_ts);
+        assert_eq!(pr.amount_per_unit, 2_000_000); // 20 000.00
+        assert_eq!(b.events[1].action_id, coupon2_id);
+        assert_eq!(b.events[1].amount_per_unit, 800_000, "coupon 2 accrues on the old face");
+        assert_eq!(b.events[3].amount_per_unit, 640_000, "coupon 3 on 80 000");
+        assert_eq!(b.events[4].amount_per_unit, 640_000, "coupon 4 on 80 000");
+        assert_eq!(b.events[5].kind, kind::MATURITY);
+        assert_eq!(b.events[5].amount_per_unit, 8_000_000);
+        assert_eq!(b.position(pr.action_id), Some(2));
+        assert_eq!(b.factor_bps, 8_000);
+    }
+
+    /// Test 9 (logic level): a holder synced before the insertion keeps correct positions.
+    #[test]
+    fn insertion_after_holder_synced() {
+        let mut b = bond();
+        let mut h = holder(300);
+        let r1 = b.events[0].record_ts;
+        change(&mut h, &b, r1 + 1, -50); // synced_upto = 1, bal_at[0] = 300
+        b.insert_partial_redemption(1, 2_000); // inserted at pos 2, still in the future
+        let r2 = b.events[1].record_ts;
+        change(&mut h, &b, r2 + 1, -50);
+        assert_eq!(h.units_at(&b, 0, r2 + 1), Some(300));
+        assert_eq!(h.units_at(&b, 1, r2 + 1), Some(250), "coupon 2");
+        assert_eq!(h.units_at(&b, 2, r2 + 1), Some(250), "partial redemption, same record date");
+        assert_eq!(h.units_at(&b, 3, r2 + 1), None);
+        assert_eq!(h.units_at(&b, 3, b.events[3].record_ts), Some(200));
     }
 
     /// Test 2 (logic level): several record dates pass silently, then many transfers.

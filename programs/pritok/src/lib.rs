@@ -36,4 +36,28 @@ pub mod pritok {
     pub fn transfer_bond(ctx: Context<TransferBond>, units: u64) -> Result<()> {
         instructions::transfer::transfer_bond_handler(ctx, units)
     }
+
+    pub fn fund_action(ctx: Context<FundAction>, action_id: u8, amount: u64) -> Result<()> {
+        instructions::payout::fund_action_handler(ctx, action_id, amount)
+    }
+
+    pub fn mark_default(ctx: Context<MarkDefault>, action_id: u8) -> Result<()> {
+        instructions::payout::mark_default_handler(ctx, action_id)
+    }
+
+    pub fn claim(ctx: Context<ClaimPayout>, action_id: u8) -> Result<()> {
+        instructions::payout::claim_handler(ctx, action_id)
+    }
+
+    pub fn declare_partial_redemption(
+        ctx: Context<DeclarePartialRedemption>,
+        coupon_action_id: u8,
+        redeem_bps: u16,
+    ) -> Result<()> {
+        instructions::payout::declare_partial_redemption_handler(ctx, coupon_action_id, redeem_bps)
+    }
+
+    pub fn redeem(ctx: Context<Redeem>, maturity_action_id: u8, coupon_action_id: u8) -> Result<()> {
+        instructions::payout::redeem_handler(ctx, maturity_action_id, coupon_action_id)
+    }
 }

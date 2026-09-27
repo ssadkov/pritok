@@ -32,4 +32,28 @@ pub enum PritokError {
     SelfTransfer,
     #[msg("Arithmetic overflow")]
     Overflow,
+    #[msg("Unknown action")]
+    UnknownAction,
+    #[msg("Wrong action kind for this instruction")]
+    WrongActionKind,
+    #[msg("Action is settled through the bank path")]
+    BankSettlement,
+    #[msg("Funding exceeds the amount required")]
+    OverFunding,
+    #[msg("Payment date has not arrived")]
+    NotPayable,
+    #[msg("Action is not fully funded")]
+    NotFunded,
+    #[msg("Action cannot be marked as defaulted")]
+    CannotDefault,
+    #[msg("Nothing to pay")]
+    NothingToPay,
+    #[msg("Payment vault holds less than reserved obligations")]
+    VaultBelowReserve,
+    #[msg("Record date has already passed")]
+    RecordDatePassed,
+    #[msg("Event limit reached")]
+    TooManyEvents,
+    #[msg("Invalid redemption share")]
+    InvalidRedemption,
 }

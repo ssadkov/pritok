@@ -11,7 +11,8 @@ use anchor_spl::token_2022::{
 use anchor_spl::token_2022_extensions::default_account_state::{
     default_account_state_initialize, DefaultAccountStateInitialize,
 };
-use anchor_spl::token_interface::Mint;
+use anchor_spl::associated_token::AssociatedToken;
+use anchor_spl::token_interface::{Mint, TokenAccount, TokenInterface};
 
 use crate::errors::PritokError;
 use crate::state::*;
@@ -46,8 +47,19 @@ pub struct CreateBond<'info> {
     /// CHECK: created and initialized here as a Token-2022 mint.
     #[account(mut, seeds = [b"mint", bond.key().as_ref()], bump)]
     pub bond_mint: UncheckedAccount<'info>,
-    pub payment_mint: InterfaceAccount<'info, Mint>,
+    pub payment_mint: Box<InterfaceAccount<'info, Mint>>,
+    /// Payment vault: holds funded, not yet claimed obligations; only the program moves money out.
+    #[account(
+        init,
+        payer = issuer,
+        associated_token::mint = payment_mint,
+        associated_token::authority = bond,
+        associated_token::token_program = payment_token_program
+    )]
+    pub vault: Box<InterfaceAccount<'info, TokenAccount>>,
     pub bond_token_program: Program<'info, Token2022>,
+    pub payment_token_program: Interface<'info, TokenInterface>,
+    pub associated_token_program: Program<'info, AssociatedToken>,
     pub system_program: Program<'info, System>,
 }
 
