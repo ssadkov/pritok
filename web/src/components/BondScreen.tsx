@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { InvestorPanel, IssuerPanel, OperatorPanel, Toast, useAct, type Role } from "./RolePanels";
 import { DEFAULT_BOND, ISSUER_NAME, colorFor, label } from "@/lib/demo";
 import {
+  CLAIM,
   KIND,
   STATUS_LABEL,
   count,
@@ -275,6 +276,7 @@ function BondHeader({ bond }: { bond: BondView }) {
           <span className="tag">Выплаты в tKZT</span>
           <span className="tag">Solana {bond.cluster}</span>
           {matured && <span className="tag">Выпуск погашен</span>}
+          {bond.paused && <span className="tag red">Операции приостановлены регистратором</span>}
           {defaulted.map((e) => (
             <span key={e.pos} className="tag red">
               {uiStatus(bond, e) === "default" ? "Технический дефолт" : "Просрочка"} по «{eventTitle(bond, e)}»
@@ -499,8 +501,14 @@ function CalcPanel({
           </div>
           <div className="tx">
             {claim ? (
-              <a href={explorerAddr(claim.address, bond.cluster)} target="_blank" rel="noopener" title="Квитанция о выплате в блокчейне">
-                выплачено ↗
+              <a
+                href={explorerAddr(claim.address, bond.cluster)}
+                target="_blank"
+                rel="noopener"
+                title={claim.status === CLAIM.BANK_CONFIRMED ? `Хеш платёжного поручения: ${claim.bankRefHash}` : "Квитанция о выплате в блокчейне"}
+                className={claim.status === CLAIM.BANK_REQUESTED ? "amber" : undefined}
+              >
+                {claim.status === CLAIM.PAID ? "на кошелёк ↗" : claim.status === CLAIM.BANK_REQUESTED ? "поручение в банк ↗" : "оплачено банком ↗"}
               </a>
             ) : st === "default" || st === "overdue" ? (
               <span className="pending">ждёт погашения долга</span>
@@ -651,6 +659,14 @@ function describe(bond: BondView, op: OpView) {
       return `${who} получил выплату по ${evName}`;
     case "redeem":
       return `${who} сдал облигации и получил номинал`;
+    case "claim_to_bank":
+      return `Выплата по ${evName} для ${label(op.counterparty ?? "")} направлена платёжному агенту для перевода в банк`;
+    case "confirm_bank_payment":
+      return `Платёжный агент подтвердил банковский перевод ${label(op.counterparty ?? "")} по ${evName}`;
+    case "revoke_holder": {
+      const h = bond.holders.find((x) => x.address === op.counterparty);
+      return `Регистратор отозвал допуск ${h ? label(h.owner) : ""}`;
+    }
     default:
       return op.name;
   }

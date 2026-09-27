@@ -48,6 +48,12 @@ function decodeOp(sig: string, tx: ParsedTransactionWithMeta | null): OpView | n
       return { ...base, actionId: n("action_id") };
     case "allow_holder":
       return { ...base, actor: acc[3] };
+    case "claim_to_bank":
+      return { ...base, actor: acc[0], counterparty: acc[1], actionId: n("action_id") };
+    case "confirm_bank_payment":
+      return { ...base, actor: acc[0], counterparty: acc[3], actionId: n("action_id") };
+    case "revoke_holder":
+      return { ...base, actor: acc[0], counterparty: acc[2] };
     default:
       return base;
   }
@@ -114,12 +120,14 @@ export async function loadBond(address: string): Promise<BondView & { stale?: bo
 
 async function readBond(address: string): Promise<BondView> {
   const bondKey = new PublicKey(address);
-  const [b, now, holderAccs, claimAccs, ops] = await Promise.all([
+  const configKey = PublicKey.findProgramAddressSync([Buffer.from("config")], program.programId)[0];
+  const [b, now, holderAccs, claimAccs, ops, config] = await Promise.all([
     program.account.bond.fetch(bondKey),
     chainTime(),
     program.account.holder.all([{ memcmp: { offset: 8, bytes: bondKey.toBase58() } }]),
     program.account.claim.all([{ memcmp: { offset: 8, bytes: bondKey.toBase58() } }]),
     history(bondKey),
+    program.account.config.fetch(configKey),
   ]);
 
   const issuedUnits = num(b.issuedUnits);
@@ -155,6 +163,8 @@ async function readBond(address: string): Promise<BondView> {
     actionId: c.actionId,
     units: num(c.units),
     amount: num(c.amount),
+    status: c.status,
+    bankRefHash: c.bankRefHash.some((x) => x !== 0) ? Buffer.from(c.bankRefHash).toString("hex") : null,
   }));
 
   return {
@@ -173,6 +183,8 @@ async function readBond(address: string): Promise<BondView> {
     startTs: num(b.startTs),
     subscriptionEndTs: num(b.subscriptionEndTs),
     subscriptionClosed: b.subscriptionClosed,
+    paused: config.paused,
+    operator: config.operator.toBase58(),
     issuedUnits,
     supply: num(b.supply),
     reserved: num(b.reserved),

@@ -4,6 +4,7 @@
 export const KIND = { COUPON: 0, PARTIAL_REDEMPTION: 1, MATURITY: 2 } as const;
 export const STATUS = { SCHEDULED: 0, FUNDED: 1, DEFAULTED: 2 } as const;
 export const MODE = { ONCHAIN: 0, BANK: 1 } as const;
+export const CLAIM = { PAID: 0, BANK_REQUESTED: 1, BANK_CONFIRMED: 2 } as const;
 
 export interface EventView {
   pos: number;
@@ -35,6 +36,9 @@ export interface ClaimView {
   actionId: number;
   units: number;
   amount: number;
+  status: number;
+  /** Hex of the payment-reference hash, set when the paying agent confirms. */
+  bankRefHash: string | null;
 }
 
 export interface OpView {
@@ -75,6 +79,8 @@ export interface BondView {
   startTs: number;
   subscriptionEndTs: number;
   subscriptionClosed: boolean;
+  paused: boolean;
+  operator: string;
   issuedUnits: number;
   supply: number;
   reserved: number;

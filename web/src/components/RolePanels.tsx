@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { label } from "@/lib/demo";
 import {
+  CLAIM,
   KIND,
   STATUS,
   count,
@@ -245,11 +246,24 @@ export function InvestorPanel({ bond, a, who, setWho }: { bond: BondView; a: Act
                 </div>
                 <div className="btns">
                   {claim ? (
-                    <span className="st paid">Получено</span>
+                    <span className={`st ${claim.status === CLAIM.BANK_REQUESTED ? "planned" : "paid"}`}>
+                      {claim.status === CLAIM.PAID ? "На кошельке" : claim.status === CLAIM.BANK_REQUESTED ? "Ждёт банка" : "Оплачено банком"}
+                    </span>
                   ) : st === "paying" ? (
-                    <Btn a={a} id={`claim-${e.actionId}`} onClick={() => a.act(`claim-${e.actionId}`, `Получено ${money(amount)} ₸ по «${eventTitle(bond, e)}»`, { type: "claim", who: me.key, actionId: e.actionId })}>
-                      Получить {money(amount)} ₸
-                    </Btn>
+                    <>
+                      <Btn a={a} id={`claim-${e.actionId}`} onClick={() => a.act(`claim-${e.actionId}`, `Получено ${money(amount)} ₸ по «${eventTitle(bond, e)}»`, { type: "claim", who: me.key, actionId: e.actionId })}>
+                        Получить {money(amount)} ₸
+                      </Btn>
+                      <Btn
+                        a={a}
+                        id={`bank-${e.actionId}`}
+                        className="btn ghost"
+                        title="Доля уйдёт платёжному агенту, он переведёт тенге на банковский счёт"
+                        onClick={() => a.act(`bank-${e.actionId}`, `Выплата ${money(amount)} ₸ направлена в банк`, { type: "claimToBank", who: me.key, actionId: e.actionId })}
+                      >
+                        В банк
+                      </Btn>
+                    </>
                   ) : st === "default" || st === "overdue" ? (
                     <span className="st default">Ждёт денег эмитента</span>
                   ) : (
@@ -338,29 +352,117 @@ function TransferHint({ bond }: { bond: BondView }) {
 
 export function OperatorPanel({ bond, a }: { bond: BondView; a: Act }) {
   const [addr, setAddr] = useState("");
+  const [refs, setRefs] = useState<Record<string, string>>({});
   const valid = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(addr.trim());
+  const bankQueue = bond.claims.filter((c) => c.status === CLAIM.BANK_REQUESTED);
+  const bankDone = bond.claims.filter((c) => c.status === CLAIM.BANK_CONFIRMED);
+  const title = (actionId: number) => {
+    const e = bond.events.find((x) => x.actionId === actionId);
+    return e ? eventTitle(bond, e) : `#${actionId}`;
+  };
+
   return (
     <section className="card role-panel">
       <div className="card-h">
-        <h2>Кабинет регистратора</h2>
-        <span className="hint">допуск держателей к выпуску</span>
+        <h2>Кабинет регистратора и платёжного агента</h2>
+        <div className="btns">
+          {bond.paused ? (
+            <Btn a={a} id="unpause" onClick={() => a.act("unpause", "Операции возобновлены", { type: "pause", paused: false })}>
+              Возобновить операции
+            </Btn>
+          ) : (
+            <Btn a={a} id="pause" className="btn danger" onClick={() => a.act("pause", "Подписка и переводы приостановлены", { type: "pause", paused: true })}>
+              Приостановить операции
+            </Btn>
+          )}
+        </div>
       </div>
       <div className="card-b panel-grid">
         <div>
-          <h4>Допущенные держатели</h4>
+          <h4>Банковские выплаты к подтверждению</h4>
+          {bankQueue.length === 0 && <p className="muted">Поручений нет. Держатель выбирает «В банк» в своём кабинете.</p>}
+          {bankQueue.map((c) => {
+            const k = `${c.owner}-${c.actionId}`;
+            return (
+              <div className="act-row" key={k}>
+                <div>
+                  <div className="ev-name">
+                    {label(c.owner)} · {money(c.amount)} ₸
+                  </div>
+                  <div className="muted small">{title(c.actionId)} · деньги уже у платёжного агента</div>
+                </div>
+                <div className="btns">
+                  <input
+                    className="ref-input"
+                    placeholder="№ платёжки"
+                    value={refs[k] ?? ""}
+                    onChange={(ev) => setRefs({ ...refs, [k]: ev.target.value })}
+                  />
+                  <Btn
+                    a={a}
+                    id={`confirm-${k}`}
+                    disabled={!(refs[k] ?? "").trim()}
+                    onClick={() =>
+                      a.act(`confirm-${k}`, `Банковский перевод ${label(c.owner)} подтверждён`, {
+                        type: "confirmBank",
+                        owner: c.owner,
+                        actionId: c.actionId,
+                        reference: refs[k],
+                      })
+                    }
+                  >
+                    Подтвердить
+                  </Btn>
+                </div>
+              </div>
+            );
+          })}
+          {bankDone.length > 0 && (
+            <>
+              <h4>Подтверждено</h4>
+              {bankDone.map((c) => (
+                <div className="act-row" key={`${c.owner}-${c.actionId}`}>
+                  <div>
+                    <div className="ev-name">
+                      {label(c.owner)} · {money(c.amount)} ₸
+                    </div>
+                    <div className="addr" title="В блокчейне хранится только хеш номера платёжки">
+                      {title(c.actionId)} · хеш {c.bankRefHash?.slice(0, 12)}…
+                    </div>
+                  </div>
+                  <span className="st paid">Оплачено банком</span>
+                </div>
+              ))}
+            </>
+          )}
+          <p className="muted small" style={{ marginTop: 12 }}>
+            Банковский перевод симулирован: подтверждение — заявление платёжного агента. В реальной интеграции нужна сверка с выпиской банка.
+          </p>
+        </div>
+        <div>
+          <h4>Держатели</h4>
           {bond.holders.map((h) => (
             <div className="act-row" key={h.owner}>
               <div>
                 <div className="ev-name">{label(h.owner)}</div>
                 <div className="addr">{short(h.owner)}</div>
               </div>
-              <span className={`st ${h.allowed ? "paid" : "default"}`}>{h.allowed ? "Допущен" : "Отозван"}</span>
+              <div className="btns">
+                <span className={`st ${h.allowed ? "paid" : "default"}`}>{h.allowed ? "Допущен" : "Допуск отозван"}</span>
+                {h.allowed ? (
+                  <Btn a={a} id={`revoke-${h.owner}`} className="btn ghost" onClick={() => a.act(`revoke-${h.owner}`, `Допуск ${label(h.owner)} отозван`, { type: "revoke", owner: h.owner })}>
+                    Отозвать
+                  </Btn>
+                ) : (
+                  <Btn a={a} id={`allow-${h.owner}`} className="btn ghost" onClick={() => a.act(`allow-${h.owner}`, `Допуск ${label(h.owner)} восстановлен`, { type: "allow", owner: h.owner })}>
+                    Допустить снова
+                  </Btn>
+                )}
+              </div>
             </div>
           ))}
-        </div>
-        <div>
-          <h4>Допустить кошелёк</h4>
-          <p className="muted small">В демо KYC симулирован: регистратор просто вносит адрес. Без допуска кошелёк не может купить или получить облигации.</p>
+          <p className="muted small">Отзыв запрещает получать облигации. Уже зафиксированные выплаты держатель получит.</p>
+          <h4>Допустить новый кошелёк</h4>
           <div className="form-row">
             <label style={{ flex: 1 }}>
               Адрес Solana
@@ -370,9 +472,6 @@ export function OperatorPanel({ bond, a }: { bond: BondView; a: Act }) {
           <Btn a={a} id="allow" disabled={!valid} onClick={() => a.act("allow", `Допущен ${short(addr.trim())}`, { type: "allow", owner: addr.trim() })}>
             Допустить
           </Btn>
-          <p className="muted small" style={{ marginTop: 12 }}>
-            Отзыв допуска и банковские выплаты — в следующей версии программы.
-          </p>
         </div>
       </div>
     </section>

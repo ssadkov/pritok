@@ -3,6 +3,7 @@
 import { AnchorProvider, Wallet } from "@coral-xyz/anchor";
 import { getAssociatedTokenAddressSync } from "@solana/spl-token";
 import { Connection, Keypair, PublicKey } from "@solana/web3.js";
+import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { BondClient, makeProgram } from "./pritok-client";
@@ -65,7 +66,11 @@ export type Action =
   | { type: "transfer"; who: Investor; to: string; units: number }
   | { type: "claim"; who: Investor; actionId: number }
   | { type: "redeem"; who: Investor }
-  | { type: "allow"; owner: string };
+  | { type: "allow"; owner: string }
+  | { type: "claimToBank"; who: Investor; actionId: number }
+  | { type: "confirmBank"; owner: string; actionId: number; reference: string }
+  | { type: "revoke"; owner: string }
+  | { type: "pause"; paused: boolean };
 
 export async function perform(bond: BondView, a: Action): Promise<string> {
   const { conn, keys } = ctx();
@@ -100,6 +105,19 @@ export async function perform(bond: BondView, a: Action): Promise<string> {
     }
     case "allow":
       return c.allowHolder(keys.operator, new PublicKey(a.owner));
+    case "claimToBank":
+      return c.claimToBank(inv(a.who), inv(a.who).publicKey, a.actionId, keys.operator.publicKey);
+    case "confirmBank": {
+      const ref = a.reference.trim();
+      if (!ref) throw new Error("Укажите номер платёжного поручения");
+      // Only the hash goes onchain; the reference itself stays with the paying agent.
+      const hash = [...createHash("sha256").update(ref).digest()];
+      return c.confirmBankPayment(keys.operator, new PublicKey(a.owner), a.actionId, hash);
+    }
+    case "revoke":
+      return c.revokeHolder(keys.operator, new PublicKey(a.owner));
+    case "pause":
+      return BondClient.setPaused(program, keys.operator, a.paused);
   }
 }
 
@@ -120,6 +138,11 @@ const ERRORS: Record<string, string> = {
   WrongActionKind: "Для этого события нужна другая операция",
   SelfTransfer: "Нельзя перевести самому себе",
   BankSettlement: "Событие проводится через банк",
+  Paused: "Операции приостановлены регистратором",
+  NotBankRequest: "Эта выплата не ждёт банковского подтверждения",
+  EmptyBankRef: "Укажите номер платёжного поручения",
+  NotHolderOrOperator: "Запросить выплату в банк может только держатель или регистратор",
+  NotOperator: "Действие доступно только регистратору",
 };
 
 /** Anchor/RPC error → short Russian message; a repeated claim shows as "already in use". */

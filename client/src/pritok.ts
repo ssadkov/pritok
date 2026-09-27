@@ -14,6 +14,7 @@ export const PROGRAM_ID = new PublicKey(idl.address);
 
 export const kind = { COUPON: 0, PARTIAL_REDEMPTION: 1, MATURITY: 2 } as const;
 export const eventStatus = { SCHEDULED: 0, FUNDED: 1, DEFAULTED: 2 } as const;
+export const claimStatus = { PAID: 0, BANK_REQUESTED: 1, BANK_CONFIRMED: 2 } as const;
 
 const pda = (seeds: (Buffer | Uint8Array)[]) => PublicKey.findProgramAddressSync(seeds, PROGRAM_ID)[0];
 
@@ -232,6 +233,57 @@ export class BondClient {
         systemProgram: SystemProgram.programId,
       })
       .signers([owner])
+      .rpc();
+  }
+
+  /** Payout to the paying agent for a bank transfer; `authority` is the holder or the registrar. */
+  async claimToBank(authority: Keypair, owner: PublicKey, actionId: number, operator: PublicKey) {
+    return this.program.methods
+      .claimToBank(actionId)
+      .accountsPartial({
+        authority: authority.publicKey,
+        owner,
+        config: configPda(),
+        bond: this.bond,
+        holder: holderPda(this.bond, owner),
+        claim: claimPda(this.bond, actionId, owner),
+        paymentMint: this.paymentMint,
+        vault: this.vault,
+        agentPayment: payAta(operator, this.paymentMint),
+        paymentTokenProgram: TOKEN_PROGRAM_ID,
+        systemProgram: SystemProgram.programId,
+      })
+      .signers([authority])
+      .rpc();
+  }
+
+  async confirmBankPayment(operator: Keypair, owner: PublicKey, actionId: number, bankRefHash: number[]) {
+    return this.program.methods
+      .confirmBankPayment(actionId, bankRefHash)
+      .accountsPartial({
+        operator: operator.publicKey,
+        config: configPda(),
+        bond: this.bond,
+        owner,
+        claim: claimPda(this.bond, actionId, owner),
+      })
+      .signers([operator])
+      .rpc();
+  }
+
+  async revokeHolder(operator: Keypair, owner: PublicKey) {
+    return this.program.methods
+      .revokeHolder()
+      .accountsPartial({ operator: operator.publicKey, config: configPda(), holder: holderPda(this.bond, owner) })
+      .signers([operator])
+      .rpc();
+  }
+
+  static async setPaused(program: Program<Pritok>, operator: Keypair, paused: boolean) {
+    return program.methods
+      .setPaused(paused)
+      .accountsPartial({ operator: operator.publicKey, config: configPda() })
+      .signers([operator])
       .rpc();
   }
 

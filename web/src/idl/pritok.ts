@@ -227,6 +227,224 @@ export type Pritok = {
       ]
     },
     {
+      "name": "claimToBank",
+      "discriminator": [
+        28,
+        162,
+        208,
+        80,
+        71,
+        228,
+        33,
+        192
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "docs": [
+            "The holder, or the registrar acting for the holder."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "owner"
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "bond",
+          "writable": true
+        },
+        {
+          "name": "holder",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  104,
+                  111,
+                  108,
+                  100,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "bond"
+              },
+              {
+                "kind": "account",
+                "path": "owner"
+              }
+            ]
+          }
+        },
+        {
+          "name": "claim",
+          "docs": [
+            "Same seeds as a wallet claim: a payout goes either to the wallet or to the bank, once."
+          ],
+          "writable": true
+        },
+        {
+          "name": "paymentMint",
+          "relations": [
+            "bond"
+          ]
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "bond"
+              },
+              {
+                "kind": "account",
+                "path": "paymentTokenProgram"
+              },
+              {
+                "kind": "account",
+                "path": "paymentMint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "agentPayment",
+          "docs": [
+            "Paying agent's account: the registrar's associated account for the payment token."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "account",
+                "path": "config.operator",
+                "account": "config"
+              },
+              {
+                "kind": "account",
+                "path": "paymentTokenProgram"
+              },
+              {
+                "kind": "account",
+                "path": "paymentMint"
+              }
+            ],
+            "program": {
+              "kind": "const",
+              "value": [
+                140,
+                151,
+                37,
+                143,
+                78,
+                36,
+                137,
+                241,
+                187,
+                61,
+                16,
+                41,
+                20,
+                142,
+                13,
+                131,
+                11,
+                90,
+                19,
+                153,
+                218,
+                255,
+                16,
+                132,
+                4,
+                142,
+                123,
+                216,
+                219,
+                233,
+                248,
+                89
+              ]
+            }
+          }
+        },
+        {
+          "name": "paymentTokenProgram"
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "actionId",
+          "type": "u8"
+        }
+      ]
+    },
+    {
       "name": "closeSubscription",
       "discriminator": [
         33,
@@ -245,6 +463,71 @@ export type Pritok = {
         }
       ],
       "args": []
+    },
+    {
+      "name": "confirmBankPayment",
+      "discriminator": [
+        118,
+        46,
+        68,
+        50,
+        22,
+        55,
+        210,
+        159
+      ],
+      "accounts": [
+        {
+          "name": "operator",
+          "signer": true,
+          "relations": [
+            "config"
+          ]
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "bond"
+        },
+        {
+          "name": "owner"
+        },
+        {
+          "name": "claim",
+          "writable": true
+        }
+      ],
+      "args": [
+        {
+          "name": "actionId",
+          "type": "u8"
+        },
+        {
+          "name": "bankRefHash",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
     },
     {
       "name": "createBond",
@@ -868,6 +1151,98 @@ export type Pritok = {
       ]
     },
     {
+      "name": "revokeHolder",
+      "discriminator": [
+        250,
+        238,
+        38,
+        18,
+        138,
+        55,
+        227,
+        111
+      ],
+      "accounts": [
+        {
+          "name": "operator",
+          "signer": true,
+          "relations": [
+            "config"
+          ]
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "holder",
+          "writable": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "setPaused",
+      "discriminator": [
+        91,
+        60,
+        125,
+        192,
+        176,
+        225,
+        166,
+        218
+      ],
+      "accounts": [
+        {
+          "name": "operator",
+          "signer": true,
+          "relations": [
+            "config"
+          ]
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "paused",
+          "type": "bool"
+        }
+      ]
+    },
+    {
       "name": "subscribe",
       "discriminator": [
         254,
@@ -1361,6 +1736,21 @@ export type Pritok = {
       "code": 6026,
       "name": "invalidRedemption",
       "msg": "Invalid redemption share"
+    },
+    {
+      "code": 6027,
+      "name": "notHolderOrOperator",
+      "msg": "Only the holder or the registrar can request a bank payout"
+    },
+    {
+      "code": 6028,
+      "name": "notBankRequest",
+      "msg": "Payout is not awaiting bank confirmation"
+    },
+    {
+      "code": 6029,
+      "name": "emptyBankRef",
+      "msg": "Bank payment reference is empty"
     }
   ],
   "types": [

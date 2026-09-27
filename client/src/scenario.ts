@@ -124,6 +124,8 @@ async function main() {
   await faucet(bolat.publicKey, FACE * 1_000n);
   await faucet(fund.publicKey, FACE * 1_000n);
   await faucet(issuer.publicKey, FACE * 2_000n);
+  // The registrar is also the paying agent: bank payouts land in its tKZT account.
+  await getOrCreateAssociatedTokenAccount(conn, payer, tkzt, operator.publicKey);
 
   // --- 2. Issue
   const now = await chainTime();
