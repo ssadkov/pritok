@@ -6,15 +6,16 @@ PRITOK services a tokenized bond after placement — the job of a registrar and 
 
 Built for the Superteam Kazakhstan × KASE side track [*Corporate Actions on Blockchain*](https://superteam.fun/earn/listing/superteam-kazakhstan-x-kase-side-track-corporate-actions-on-blockchain). Independent prototype, not affiliated with KASE.
 
-## Status (2026-09-27)
+## Status (2026-09-27, program upgraded same day)
 
 | | |
 |---|---|
 | Program | deployed to **devnet**: [`9LMSMqD3xMBaNdfRb4bKDT3MBTX8ry1Na84rMSJ787aY`](https://explorer.solana.com/address/9LMSMqD3xMBaNdfRb4bKDT3MBTX8ry1Na84rMSJ787aY?cluster=devnet) |
-| Tests | 15 passing (6 unit, 9 LiteSVM integration) |
+| Tests | 17 passing (6 unit, 11 LiteSVM integration) |
 | Devnet run | full bond lifecycle, 40 transactions — bond [`2dwYhf…u8RG`](https://explorer.solana.com/address/2dwYhfHkJCpuwrhYBCvZpLYEzrbkVHzW2tyjzMNXu8RG?cluster=devnet) |
 | Web | live public registry (`web/`, Next.js) reading devnet |
-| Not yet built | bank settlement path, holder revocation and pause, DvP trade with accrued interest, issuer/investor/registrar screens |
+| Web | role screens: issuer, investor, registrar / paying agent (devnet demo signing) |
+| Not yet built | DvP trade with accrued interest |
 
 ## Corporate actions
 
@@ -23,6 +24,7 @@ Built for the Superteam Kazakhstan × KASE side track [*Corporate Actions on Blo
 | **Coupon** | Scheduled at issue. Entitlement = bonds held at the record date × coupon per bond. Holders claim after the payment date. |
 | **Partial redemption** (extra action) | Declared by the issuer on the date of a future coupon and funded in the same transaction. Later coupons and maturity are recalculated on the reduced face value. |
 | **Maturity** | Transfers close at the maturity record date. `redeem` burns the holder's bonds and pays principal plus the last coupon in one transaction. |
+| **Bank payout** | Instead of claiming to a wallet, a holder (or the registrar for a holder without a wallet) sends the payout to the paying agent. The money leaves the vault onchain; the agent then attests the bank transfer, storing only a SHA-256 of the payment reference. A payout goes to the wallet or to the bank, once. |
 | **Default** | If an event is underfunded on its payment date, anyone can mark it defaulted. Claims stay closed until the issuer pays the full amount; the debt is never written down. |
 
 ## Design
@@ -33,7 +35,7 @@ Built for the Superteam Kazakhstan × KASE side track [*Corporate Actions on Blo
 
 **Money.** Placement proceeds go straight to the issuer. Payouts go through a vault owned by the bond PDA: the issuer funds it, only the program pays out of it, and every instruction checks `vault balance ≥ funded-but-unclaimed obligations`. Each payout creates a receipt account, so nothing is paid twice. The payment token is **tKZT**, a test tenge on devnet; the operator keeps an allowlist and Token-2022 mints with transfer fees or hooks are rejected.
 
-**Roles.** Issuer: creates the bond, funds events, declares partial redemptions. Operator (registrar / paying agent): admits holders. Holder: subscribes, transfers, claims, redeems. Anyone: marks a default, reads everything.
+**Roles.** Issuer: creates the bond, funds events, declares partial redemptions. Operator (registrar / paying agent): admits and revokes holders, pauses subscriptions and transfers, confirms bank payouts. Revocation and pause never cancel payouts that already exist. Holder: subscribes, transfers, claims, redeems. Anyone: marks a default, reads everything.
 
 ## Implemented vs simulated
 
@@ -42,6 +44,7 @@ Built for the Superteam Kazakhstan × KASE side track [*Corporate Actions on Blo
 | bond token, holder registry, admission | KYC (the operator simply admits an address) |
 | record dates, entitlements, coupons, partial redemption, maturity with burn | tKZT instead of a real tenge stablecoin |
 | default, issuer debt and cure | accelerated time (a "half-year" is minutes) |
+| bank payout: money to the paying agent, confirmation with a reference hash | the bank transfer itself (the confirmation is the paying agent's statement) |
 
 ## Repository
 
