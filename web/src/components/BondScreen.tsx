@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { NewBondButton } from "./NewBondButton";
 import { InvestorPanel, IssuerPanel, OperatorPanel, Toast, useAct, type Role } from "./RolePanels";
 import { DEFAULT_BOND, ISSUER_NAME, colorFor, label } from "@/lib/demo";
 import {
@@ -120,6 +121,14 @@ export function BondScreen({ address }: { address: string }) {
     <>
       <TopBar bond={bond} now={now} stale={!!error || !!bond.stale} role={demo ? role : "public"} setRole={setRole} />
       <main className="wrap">
+        {demo && bond.supply === 0 && bond.subscriptionClosed && (
+          <div className="card banner">
+            <div>
+              <b>Этот выпуск уже погашен.</b> Кнопки ролей работают на живом выпуске — запустите новый: он будет создан, размещён среди трёх инвесторов и пройдёт весь цикл примерно за 17 минут.
+            </div>
+            <NewBondButton />
+          </div>
+        )}
         <BondHeader bond={bond} />
         {demo && role === "issuer" && <IssuerPanel bond={bond} a={a} />}
         {demo && role === "investor" && <InvestorPanel bond={bond} a={a} who={who} setWho={setWho} />}
@@ -229,6 +238,7 @@ function TopBar({
           </div>
         </div>
         <div className="spacer" />
+        {demo && <NewBondButton className="btn ghost small-btn" />}
         <span className={`live${stale ? " stale" : ""}`} title={stale ? "Нет связи с devnet — показаны последние данные" : "Данные из devnet, обновление каждые 10 с"}>
           <i />
           devnet

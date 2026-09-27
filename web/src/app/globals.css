@@ -233,3 +233,6 @@
   @media (max-width: 720px) { .panel-grid { grid-template-columns: minmax(0, 1fr); } }
   .ref-input { font: inherit; font-size: 13px; padding: 7px 10px; border: 1px solid var(--line-strong); border-radius: 8px; width: 130px; }
   a.amber { color: var(--amber) !important; }
+  .small-btn { padding: 6px 10px; font-size: 12px; }
+  .new-bond { display: inline-flex; align-items: center; gap: 8px; }
+  .banner { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 20px; background: var(--green-soft); border-color: #cfe3c8; flex-wrap: wrap; }

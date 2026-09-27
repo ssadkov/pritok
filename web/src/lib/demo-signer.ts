@@ -28,6 +28,9 @@ function key(name: string) {
 }
 
 let cached: { conn: Connection; keys: Record<string, Keypair> } | null = null;
+export function demoContext() {
+  return ctx();
+}
 function ctx() {
   if (!cached) {
     const names = ["payer", "issuer", "operator", ...INVESTORS];
