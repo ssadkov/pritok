@@ -17,9 +17,13 @@ export type Investor = (typeof INVESTORS)[number];
 
 export const demoEnabled = () => process.env.DEMO_SIGNING === "1" && CLUSTER !== "mainnet-beta";
 
+// On a host without the key files (Vercel), DEMO_KEYS holds {"payer":[...64 bytes], ...}.
+const envKeys: Record<string, number[]> | null = process.env.DEMO_KEYS ? JSON.parse(process.env.DEMO_KEYS) : null;
+
 function key(name: string) {
-  const file = path.join(KEYS_DIR, `${name}.json`);
-  return Keypair.fromSecretKey(Uint8Array.from(JSON.parse(fs.readFileSync(file, "utf8"))));
+  const bytes = envKeys ? envKeys[name] : JSON.parse(fs.readFileSync(path.join(KEYS_DIR, `${name}.json`), "utf8"));
+  if (!bytes) throw new Error(`Demo key "${name}" is missing`);
+  return Keypair.fromSecretKey(Uint8Array.from(bytes));
 }
 
 let cached: { conn: Connection; keys: Record<string, Keypair> } | null = null;

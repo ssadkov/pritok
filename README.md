@@ -82,4 +82,6 @@ cp .env.example .env.local   # set RPC_URL to a dedicated devnet RPC
 npm run dev                  # http://localhost:3100
 ```
 
+Role screens sign with devnet demo keys when `DEMO_SIGNING=1`: from `client/.keys` locally, or from `DEMO_KEYS` (JSON of secret-key byte arrays) on a host such as Vercel, with Root Directory `web`. Anyone with the link can press the buttons — devnet only.
+
 The public devnet RPC rate-limits the registry reads (holder and receipt accounts plus transaction history); use a dedicated endpoint such as Helius devnet.
