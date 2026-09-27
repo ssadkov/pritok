@@ -39,7 +39,13 @@ export function useAct(address: string, onDone: () => void) {
         body: JSON.stringify(body),
       });
       const data = await res.json();
-      setResult(res.ok ? { ok: true, text, sig: data.sig } : { ok: false, text: data.error ?? "Ошибка" });
+      setResult(
+        !res.ok
+          ? { ok: false, text: data.error ?? "Ошибка" }
+          : data.pending
+            ? { ok: true, text: `${text} — отправлено, devnet подтверждает дольше обычного`, sig: data.sig }
+            : { ok: true, text, sig: data.sig },
+      );
     } catch (e) {
       setResult({ ok: false, text: String((e as Error).message ?? e) });
     } finally {

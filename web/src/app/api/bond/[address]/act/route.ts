@@ -14,6 +14,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ address
     invalidate(address);
     return NextResponse.json({ sig });
   } catch (e) {
+    // web3.js gives up waiting after 30 s on a slow devnet, but the transaction is
+    // usually landed: report it as pending with its signature instead of a failure.
+    const text = String((e as Error)?.message ?? e);
+    const pending = text.match(/not confirmed in [\d.]+ seconds.*?signature ([1-9A-HJ-NP-Za-km-z]{64,88})/s);
+    if (pending) {
+      invalidate(address);
+      return NextResponse.json({ sig: pending[1], pending: true });
+    }
     return NextResponse.json({ error: explain(e) }, { status: 400 });
   }
 }
