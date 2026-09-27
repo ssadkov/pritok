@@ -132,7 +132,7 @@ PRITOK — **реестр и платёжный агент в одной про�
 | `Config` | `operator`, `paused`, `payment_mints` (разрешённые денежные токены) |
 | `Bond` | `issuer`, `bond_mint`, `payment_mint`, `face_value`, `coupon_bps`, `period_secs`, `start_ts`, `record_offset_secs`, `num_periods`, `factor_bps` (текущий, 10 000 = 100%), `subscription_end_ts` (< первой отсечки), `issued_units` (фиксируется при закрытии подписки, дальше не меняется), `supply` (ещё не сожжённые облигации), `reserved` (внесённые и ещё не выплаченные onchain-обязательства), `status` (Placement / Active / Matured / Closed), `schedule: [(record_ts, action_id); MAX_EVENTS]` — **отсортирован по времени отсечки**, `schedule_len` |
 | `Holder` (по `bond` + кошелёк) | `allowed`, `balance`, `synced_upto` (сколько первых событий графика уже зафиксировано), `bal_at: [u64; MAX_EVENTS]` |
-| `Action` (по `bond` + `action_id`) | `kind` (Coupon / PartialRedemption / Maturity), `record_ts`, `pay_ts`, `factor_bps_applied` (фактор, от которого считается событие), `amount_per_unit`, `required`, `funded`, `claimed`, `settlement_mode` (Onchain / Bank), `status` (Scheduled / Funded / Defaulted / Settled) |
+| `Event` (**внутри `Bond.events`**, не отдельный аккаунт — решение при реализации 2026-09-27) | `action_id`, `kind` (Coupon / PartialRedemption / Maturity), `record_ts`, `pay_ts`, `factor_bps_applied` (фактор, от которого считается событие), `amount_per_unit`, `funded`, `claimed`, `mode` (Onchain / Bank), `status` (Scheduled / Funded / Defaulted). `required = amount_per_unit × issued_units` вычисляется, не хранится |
 | `PaymentVault` | ATA `payment_mint`, владелец — PDA `Bond`; снять может только программа |
 | `Claim` (по `action` + держатель) | `amount`, `status` (Paid / BankRequested / BankConfirmed), `bank_ref_hash` — квитанция и защита от двойной выплаты |
 
@@ -250,6 +250,20 @@ balance = новый баланс
 | отсечка, расчёт прав, купоны, частичное погашение, погашение со сжиганием | банковские переводы (вводится номер платёжки; подтверждение — слово оператора) |
 | дефолт, долг эмитента и его погашение | tKZT вместо реального тенгового стейблкоина |
 | onchain-учёт банковских поручений и подтверждений | ускоренное время (период = минуты) |
+
+---
+
+## Статус на 2026-09-27
+
+| Сделано | Проверено |
+|---|---|
+| Программа: допуск, выпуск с графиком, подписка, закрытие подписки, перевод, внесение денег, дефолт и довнесение, выплата с квитанцией, частичное погашение, погашение со сжиганием | 15 тестов (6 unit + 9 LiteSVM), обязательные №1–11 для onchain-пути |
+| Деплой в devnet: `9LMSMqD3xMBaNdfRb4bKDT3MBTX8ry1Na84rMSJ787aY` | полный сценарий §4 без банковского пути и DvP, 40 транзакций, выпуск `2dwYhfHkJCpuwrhYBCvZpLYEzrbkVHzW2tyjzMNXu8RG` |
+| TypeScript-клиент `client/src/pritok.ts`, скрипт сценария | итог: в обращении 0, счёт выплат пуст, по каждому событию внесено = выплачено |
+
+**Не сделано:** банковский путь, `revoke_holder` / `set_paused`, `trade_dvp` с НКД, интерфейс, видео.
+
+**Отступления от плана:** события хранятся внутри `Bond`, а не отдельными `Action`-аккаунтами; статус «выпуск закрыт» не хранится, а выводится из `supply = 0` и отсутствия долга.
 
 ---
 
