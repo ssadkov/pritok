@@ -60,7 +60,12 @@ pub struct Event {
 }
 
 pub mod claim_status {
+    /// Paid to the holder's wallet.
     pub const PAID: u8 = 0;
+    /// Moved to the paying agent for a bank transfer.
+    pub const BANK_REQUESTED: u8 = 1;
+    /// Paying agent attested the bank transfer.
+    pub const BANK_CONFIRMED: u8 = 2;
 }
 
 /// Receipt for one holder's payout on one event; its existence prevents double payment.

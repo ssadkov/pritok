@@ -56,4 +56,10 @@ pub enum PritokError {
     TooManyEvents,
     #[msg("Invalid redemption share")]
     InvalidRedemption,
+    #[msg("Only the holder or the registrar can request a bank payout")]
+    NotHolderOrOperator,
+    #[msg("Payout is not awaiting bank confirmation")]
+    NotBankRequest,
+    #[msg("Bank payment reference is empty")]
+    EmptyBankRef,
 }

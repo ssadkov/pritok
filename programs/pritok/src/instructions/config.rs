@@ -55,3 +55,32 @@ pub fn allow_holder_handler(ctx: Context<AllowHolder>) -> Result<()> {
     holder.allowed = true;
     Ok(())
 }
+
+#[derive(Accounts)]
+pub struct RevokeHolder<'info> {
+    pub operator: Signer<'info>,
+    #[account(seeds = [b"config"], bump = config.bump, has_one = operator @ PritokError::NotOperator)]
+    pub config: Account<'info, Config>,
+    #[account(mut)]
+    pub holder: Account<'info, Holder>,
+}
+
+/// Blocks receiving bonds (subscription and incoming transfers). Rights that already
+/// exist — recorded coupons, principal — stay claimable.
+pub fn revoke_holder_handler(ctx: Context<RevokeHolder>) -> Result<()> {
+    ctx.accounts.holder.allowed = false;
+    Ok(())
+}
+
+#[derive(Accounts)]
+pub struct SetPaused<'info> {
+    pub operator: Signer<'info>,
+    #[account(mut, seeds = [b"config"], bump = config.bump, has_one = operator @ PritokError::NotOperator)]
+    pub config: Account<'info, Config>,
+}
+
+/// Emergency stop for subscriptions and transfers; payouts keep working.
+pub fn set_paused_handler(ctx: Context<SetPaused>, paused: bool) -> Result<()> {
+    ctx.accounts.config.paused = paused;
+    Ok(())
+}

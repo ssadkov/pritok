@@ -32,7 +32,7 @@ fn vault_transfer<'info>(
     )
 }
 
-fn check_reserve(vault: &mut InterfaceAccount<TokenAccount>, bond: &Bond) -> Result<()> {
+pub(crate) fn check_reserve(vault: &mut InterfaceAccount<TokenAccount>, bond: &Bond) -> Result<()> {
     vault.reload()?;
     require!(vault.amount >= bond.reserved, PritokError::VaultBelowReserve);
     Ok(())
@@ -41,7 +41,7 @@ fn check_reserve(vault: &mut InterfaceAccount<TokenAccount>, bond: &Bond) -> Res
 /// Pays `holder`'s entitlement for the event at `pos` from the vault and fills the receipt.
 /// Shared by `claim` and `redeem`.
 #[allow(clippy::too_many_arguments)]
-fn pay_event<'info>(
+pub(crate) fn pay_event<'info>(
     bond: &mut Account<'info, Bond>,
     pos: usize,
     holder: &Holder,

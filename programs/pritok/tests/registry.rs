@@ -109,6 +109,7 @@ fn setup() -> Env {
             spl_token::instruction::initialize_mint2(&spl_token::ID, &tkzt, &operator.pubkey(), None, 2).unwrap(),
             create_associated_token_account(&operator.pubkey(), &issuer.pubkey(), &tkzt, &spl_token::ID),
             spl_token::instruction::mint_to(&spl_token::ID, &tkzt, &tkzt_ata(&issuer.pubkey(), &tkzt), &operator.pubkey(), &[], ISSUER_TKZT).unwrap(),
+            create_associated_token_account(&operator.pubkey(), &operator.pubkey(), &tkzt, &spl_token::ID),
         ],
         &operator,
         &[&tkzt_kp],
@@ -370,6 +371,69 @@ impl Env {
             data: pritok::instruction::Redeem { maturity_action_id: MAT, coupon_action_id: C4 }.data(),
         };
         send(&mut self.svm, &[ix], owner, &[])
+    }
+
+
+    fn claim_to_bank(&mut self, authority: &Keypair, owner: &Pubkey, action_id: u8) -> Result<(), String> {
+        let ix = Instruction {
+            program_id: pritok::ID,
+            accounts: pritok::accounts::ClaimToBank {
+                authority: authority.pubkey(),
+                owner: *owner,
+                config: self.config,
+                bond: self.bond,
+                holder: holder_pda(&self.bond, owner),
+                claim: self.claim_pda(action_id, owner),
+                payment_mint: self.tkzt,
+                vault: self.vault(),
+                agent_payment: tkzt_ata(&self.operator.pubkey(), &self.tkzt),
+                payment_token_program: spl_token::ID,
+                system_program: anchor_lang::system_program::ID,
+            }
+            .to_account_metas(None),
+            data: pritok::instruction::ClaimToBank { action_id }.data(),
+        };
+        send(&mut self.svm, &[ix], authority, &[])
+    }
+
+    fn confirm_bank(&mut self, signer: &Keypair, owner: &Pubkey, action_id: u8, bank_ref_hash: [u8; 32]) -> Result<(), String> {
+        let ix = Instruction {
+            program_id: pritok::ID,
+            accounts: pritok::accounts::ConfirmBankPayment {
+                operator: signer.pubkey(),
+                config: self.config,
+                bond: self.bond,
+                owner: *owner,
+                claim: self.claim_pda(action_id, owner),
+            }
+            .to_account_metas(None),
+            data: pritok::instruction::ConfirmBankPayment { action_id, bank_ref_hash }.data(),
+        };
+        send(&mut self.svm, &[ix], signer, &[])
+    }
+
+    fn revoke(&mut self, owner: &Pubkey) -> Result<(), String> {
+        let op = self.operator.insecure_clone();
+        let ix = Instruction {
+            program_id: pritok::ID,
+            accounts: pritok::accounts::RevokeHolder { operator: op.pubkey(), config: self.config, holder: holder_pda(&self.bond, owner) }
+                .to_account_metas(None),
+            data: pritok::instruction::RevokeHolder {}.data(),
+        };
+        send(&mut self.svm, &[ix], &op, &[])
+    }
+
+    fn set_paused(&mut self, signer: &Keypair, paused: bool) -> Result<(), String> {
+        let ix = Instruction {
+            program_id: pritok::ID,
+            accounts: pritok::accounts::SetPaused { operator: signer.pubkey(), config: self.config }.to_account_metas(None),
+            data: pritok::instruction::SetPaused { paused }.data(),
+        };
+        send(&mut self.svm, &[ix], signer, &[])
+    }
+
+    fn receipt(&self, action_id: u8, owner: &Pubkey) -> pritok::state::Claim {
+        read(&self.svm, &self.claim_pda(action_id, owner))
     }
 
     fn tkzt_balance(&self, owner: &Pubkey) -> u64 {
@@ -693,5 +757,84 @@ fn t07_redeem_then_last_coupon() {
     assert_eq!(env.event(MAT).claimed, FACE * 1_000);
     assert_eq!(env.event(C4).claimed, COUPON * 1_000);
     assert_eq!(bond.reserved, 0);
+    env.assert_reserve();
+}
+
+/// Bank off-ramp: the holder's share leaves the vault for the paying agent; the agent
+/// attests the bank transfer with a payment-reference hash.
+#[test]
+fn bank_payout_and_confirmation() {
+    use pritok::state::claim_status;
+    let mut env = setup();
+    let (a, b, f) = env.placed();
+    env.fund(C1, COUPON * 1_000).unwrap();
+    let t = pay_ts(&env, C1);
+    warp(&mut env.svm, t);
+
+    let op = env.operator.insecure_clone();
+    let agent = op.pubkey();
+    let issuer = env.issuer.insecure_clone();
+
+    env.claim(&a, C1).unwrap(); // wallet
+
+    let agent0 = env.tkzt_balance(&agent);
+    let b0 = env.tkzt_balance(&b.pubkey());
+    env.claim_to_bank(&b, &b.pubkey(), C1).unwrap(); // holder chooses the bank
+    assert_eq!(env.tkzt_balance(&agent) - agent0, 200 * COUPON, "share moved to the paying agent");
+    assert_eq!(env.tkzt_balance(&b.pubkey()), b0, "nothing to the wallet");
+    assert_eq!(env.receipt(C1, &b.pubkey()).status, claim_status::BANK_REQUESTED);
+    assert!(env.claim(&b, C1).is_err(), "a payout goes to the wallet or the bank, once");
+
+    let err = env.claim_to_bank(&issuer, &f.pubkey(), C1).unwrap_err();
+    assert!(err.contains("NotHolderOrOperator"), "{err}");
+    env.claim_to_bank(&op, &f.pubkey(), C1).unwrap(); // registrar acts for a holder without a wallet
+
+    let hash = [7u8; 32];
+    let err = env.confirm_bank(&issuer, &b.pubkey(), C1, hash).unwrap_err();
+    assert!(err.contains("NotOperator"), "{err}");
+    let err = env.confirm_bank(&op, &b.pubkey(), C1, [0; 32]).unwrap_err();
+    assert!(err.contains("EmptyBankRef"), "{err}");
+    env.confirm_bank(&op, &b.pubkey(), C1, hash).unwrap();
+    let r = env.receipt(C1, &b.pubkey());
+    assert_eq!(r.status, claim_status::BANK_CONFIRMED);
+    assert_eq!(r.bank_ref_hash, hash);
+    let err = env.confirm_bank(&op, &b.pubkey(), C1, hash).unwrap_err();
+    assert!(err.contains("NotBankRequest"), "{err}");
+    let err = env.confirm_bank(&op, &a.pubkey(), C1, hash).unwrap_err();
+    assert!(err.contains("NotBankRequest"), "wallet payouts cannot be bank-confirmed: {err}");
+
+    assert_eq!(env.event(C1).claimed, COUPON * 1_000);
+    assert_eq!(env.bond_state().reserved, 0);
+    env.assert_reserve();
+}
+
+/// Revocation blocks receiving bonds, pause blocks movements; neither cancels payouts.
+#[test]
+fn revoke_and_pause_keep_existing_rights() {
+    let mut env = setup();
+    let (a, b, f) = env.placed();
+    let op = env.operator.insecure_clone();
+    let issuer = env.issuer.insecure_clone();
+
+    env.revoke(&b.pubkey()).unwrap();
+    let err = env.transfer(&a, &b.pubkey(), 1).unwrap_err();
+    assert!(err.contains("HolderNotAllowed"), "{err}");
+    env.transfer(&b, &a.pubkey(), 10).unwrap(); // a revoked holder can still sell out
+
+    assert!(env.set_paused(&issuer, true).unwrap_err().contains("NotOperator"));
+    env.set_paused(&op, true).unwrap();
+    let err = env.transfer(&a, &f.pubkey(), 1).unwrap_err();
+    assert!(err.contains("Paused"), "{err}");
+
+    env.fund(C1, COUPON * 1_000).unwrap();
+    let t = pay_ts(&env, C1);
+    warp(&mut env.svm, t);
+    env.claim(&b, C1).unwrap(); // revoked and paused: the recorded coupon is still paid
+    env.claim(&f, C1).unwrap();
+
+    env.set_paused(&op, false).unwrap();
+    env.transfer(&a, &f.pubkey(), 1).unwrap();
+    env.allow(&b.pubkey());
+    env.transfer(&a, &b.pubkey(), 1).unwrap();
     env.assert_reserve();
 }

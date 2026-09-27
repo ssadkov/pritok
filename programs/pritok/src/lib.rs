@@ -60,4 +60,20 @@ pub mod pritok {
     pub fn redeem(ctx: Context<Redeem>, maturity_action_id: u8, coupon_action_id: u8) -> Result<()> {
         instructions::payout::redeem_handler(ctx, maturity_action_id, coupon_action_id)
     }
+
+    pub fn revoke_holder(ctx: Context<RevokeHolder>) -> Result<()> {
+        instructions::config::revoke_holder_handler(ctx)
+    }
+
+    pub fn set_paused(ctx: Context<SetPaused>, paused: bool) -> Result<()> {
+        instructions::config::set_paused_handler(ctx, paused)
+    }
+
+    pub fn claim_to_bank(ctx: Context<ClaimToBank>, action_id: u8) -> Result<()> {
+        instructions::bank::claim_to_bank_handler(ctx, action_id)
+    }
+
+    pub fn confirm_bank_payment(ctx: Context<ConfirmBankPayment>, action_id: u8, bank_ref_hash: [u8; 32]) -> Result<()> {
+        instructions::bank::confirm_bank_payment_handler(ctx, action_id, bank_ref_hash)
+    }
 }
