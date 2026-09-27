@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { label } from "@/lib/demo";
+import { Term } from "./Tour";
 import {
   CLAIM,
   KIND,
@@ -144,7 +145,10 @@ export function IssuerPanel({ bond, a }: { bond: BondView; a: Act }) {
             : null}
         </div>
         <div>
-          <h4>Частичное досрочное погашение</h4>
+          <h4>
+            Частичное досрочное погашение{" "}
+            <Term tip="Амортизация: компания возвращает часть номинала раньше срока. Номинал облигации уменьшается, следующие купоны считаются от нового номинала." />
+          </h4>
           {future.length === 0 ? (
             <p className="muted">Будущих купонов не осталось.</p>
           ) : (
@@ -370,7 +374,10 @@ export function OperatorPanel({ bond, a }: { bond: BondView; a: Act }) {
   return (
     <section className="card role-panel">
       <div className="card-h">
-        <h2>Кабинет регистратора и платёжного агента</h2>
+        <h2>
+          Кабинет регистратора и платёжного агента{" "}
+          <Term tip="Регистратор ведёт реестр: допускает инвесторов (KYC) и может приостановить операции. Платёжный агент проводит выплаты через банк тем, кто не получает на кошелёк." />
+        </h2>
         <div className="btns">
           {bond.paused ? (
             <Btn a={a} id="unpause" onClick={() => a.act("unpause", "Операции возобновлены", { type: "pause", paused: false })}>

@@ -1,7 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { nextStep } from "@/lib/next-step";
 import { NewBondButton } from "./NewBondButton";
+import { Term, startTour, useFirstVisitTour } from "./Tour";
 import { InvestorPanel, IssuerPanel, OperatorPanel, Toast, useAct, type Role } from "./RolePanels";
 import { DEFAULT_BOND, ISSUER_NAME, colorFor, label } from "@/lib/demo";
 import {
@@ -77,6 +79,7 @@ export function BondScreen({ address }: { address: string }) {
   const [role, setRoleState] = useState<Role>("public");
   const [who, setWhoState] = useState<"aigerim" | "bolat" | "fund">("aigerim");
   const a = useAct(address, reload);
+  useFirstVisitTour(!!bond);
 
   // Role and investor live in the URL (?as=investor&who=bolat) so a view can be shared.
   useEffect(() => {
@@ -129,6 +132,16 @@ export function BondScreen({ address }: { address: string }) {
             <NewBondButton />
           </div>
         )}
+        <NextStepBar
+          bond={bond}
+          now={now}
+          demo={demo}
+          onGo={(r, w) => {
+            if (w) setWho(w);
+            setRole(r);
+            window.scrollTo({ top: 0, behavior: "smooth" });
+          }}
+        />
         <BondHeader bond={bond} />
         {demo && role === "issuer" && <IssuerPanel bond={bond} a={a} />}
         {demo && role === "investor" && <InvestorPanel bond={bond} a={a} who={who} setWho={setWho} />}
@@ -136,7 +149,7 @@ export function BondScreen({ address }: { address: string }) {
         <Timeline bond={bond} now={now} selected={pos} onSelect={setSelected} />
         <div className="grid2">
           <EventsTable bond={bond} selected={pos} onSelect={setSelected} />
-          <aside className="card calc" aria-live="polite">
+          <aside className="card calc" aria-live="polite" data-tour="calc">
             <div className="card-b">
               <CalcPanel
                 bond={bond}
@@ -221,7 +234,7 @@ function TopBar({
           <span className="brand-mark" />
           PRITOK<small>реестр и выплаты</small>
         </a>
-        <div className="role">
+        <div className="role" data-tour="roles">
           <span className="seg-label">Смотреть как</span>
           <div className="seg" role="group" aria-label="Роль">
             {ROLES.map(([r, name]) => (
@@ -238,6 +251,9 @@ function TopBar({
           </div>
         </div>
         <div className="spacer" />
+        <a className="seg-link" href="/bonds" data-tour="bonds">
+          Все выпуски
+        </a>
         {demo && <NewBondButton className="btn ghost small-btn" />}
         <span className={`live${stale ? " stale" : ""}`} title={stale ? "Нет связи с devnet — показаны последние данные" : "Данные из devnet, обновление каждые 10 с"}>
           <i />
@@ -256,6 +272,10 @@ function TopBar({
             )}
           </div>
         )}
+        <button className="btn ghost small-btn tour-btn" onClick={startTour} title="Короткий тур по экрану">
+          <span className="tour-long">Как это работает</span>
+          <span className="tour-short">?</span>
+        </button>
         <div className="lang">
           KZ · EN · <b>RU</b>
         </div>
@@ -274,7 +294,7 @@ function BondHeader({ bond }: { bond: BondView }) {
   const years = (bond.events.filter((e) => e.kind === KIND.COUPON).length / 2).toString();
   const matured = bond.supply === 0 && bond.subscriptionClosed;
   return (
-    <section className="card bond">
+    <section className="card bond" data-tour="bond">
       <div className="bond-id">
         <div className="issuer">{ISSUER_NAME[bond.issuer] ?? label(bond.issuer)} · тестовый эмитент</div>
         <h1>
@@ -369,7 +389,7 @@ function Timeline({
 }) {
   const at = markerPosition(bond, now);
   return (
-    <section className="card">
+    <section className="card" data-tour="timeline">
       <div className="card-h">
         <h2>Жизнь выпуска</h2>
         <span className="hint">даты фиксации реестра и выплат</span>
@@ -407,9 +427,12 @@ function Timeline({
 
 function EventsTable({ bond, selected, onSelect }: { bond: BondView; selected: number; onSelect: (pos: number) => void }) {
   return (
-    <section className="card">
+    <section className="card" data-tour="events">
       <div className="card-h">
-        <h2>Корпоративные действия</h2>
+        <h2>
+          Корпоративные действия{" "}
+          <Term tip="События, которые компания обязана провести по облигациям: выплата купонов, частичное досрочное погашение (амортизация) и погашение в конце срока." />
+        </h2>
         <span className="hint">нажмите на строку — покажем расчёт</span>
       </div>
       <div className="card-b scroll">
@@ -417,7 +440,9 @@ function EventsTable({ bond, selected, onSelect }: { bond: BondView; selected: n
           <thead>
             <tr>
               <th>Событие</th>
-              <th>Фиксация</th>
+              <th>
+                Фиксация <Term tip="Дата фиксации реестра: кто владеет облигациями в этот момент, тот и получает выплату. Перевод после этой даты выплату не передаёт." />
+              </th>
               <th>Выплата</th>
               <th className="r">На облигацию</th>
               <th className="r">Внесено</th>
@@ -571,7 +596,7 @@ function Registry({ bond }: { bond: BondView }) {
   const total = rows.reduce((s, h) => s + units(h, current), 0) || 1;
 
   return (
-    <section className="card">
+    <section className="card" data-tour="registry">
       <div className="reg-head">
         <h2>Реестр держателей на дату</h2>
         <div className="seg" role="group" aria-label="Дата реестра">
@@ -687,7 +712,7 @@ function Journal({ bond }: { bond: BondView }) {
   const ops = [...bond.ops].reverse();
   const shown = all ? ops : ops.slice(0, 12);
   return (
-    <section className="card">
+    <section className="card" data-tour="journal">
       <div className="card-h">
         <h2>Журнал операций</h2>
         <span className="hint">каждая строка — транзакция в блокчейне</span>
@@ -727,3 +752,34 @@ function Journal({ bond }: { bond: BondView }) {
     </section>
   );
 }
+
+// ------------------------------------------------------------------ what now
+
+function NextStepBar({
+  bond,
+  now,
+  demo,
+  onGo,
+}: {
+  bond: BondView;
+  now: number;
+  demo: boolean;
+  onGo: (role: Role, who?: "aigerim" | "bolat" | "fund") => void;
+}) {
+  const step = nextStep(bond, now);
+  return (
+    <div className={`next-step ${step.tone}`} data-tour="next-step" role="status">
+      <span className="next-label">Сейчас</span>
+      <span className="next-text">
+        {step.text}
+        {step.until && step.until > now && <b className="next-timer"> {mmss(step.until - now)}</b>}
+      </span>
+      {demo && step.go && (
+        <button className="btn small-btn" onClick={() => onGo(step.go!.role, step.go!.who)}>
+          {step.go.label} →
+        </button>
+      )}
+    </div>
+  );
+}
+

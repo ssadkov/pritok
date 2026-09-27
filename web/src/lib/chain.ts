@@ -130,7 +130,10 @@ async function readBond(address: string): Promise<BondView> {
     program.account.config.fetch(configKey),
   ]);
 
-  const issuedUnits = num(b.issuedUnits);
+  // Mirrors Bond::close_subscription_if_due: once the window has ended, the units in
+  // circulation are what every entitlement is calculated on, even before any instruction
+  // has closed the subscription onchain.
+  const issuedUnits = b.subscriptionClosed || now < num(b.subscriptionEndTs) ? num(b.issuedUnits) : num(b.supply);
   const events: EventView[] = b.events.slice(0, b.eventsLen).map((e, pos) => ({
     pos,
     actionId: e.actionId,
@@ -193,4 +196,67 @@ async function readBond(address: string): Promise<BondView> {
     claims,
     ops,
   };
+}
+
+// ------------------------------------------------------------------ all bonds
+
+export interface BondSummary {
+  bond: string;
+  issuer: string;
+  bondId: number;
+  couponBps: number;
+  faceValue: number;
+  factorBps: number;
+  issuedUnits: number;
+  supply: number;
+  subscriptionOpen: boolean;
+  startTs: number;
+  maturityTs: number;
+  /** Next record or payment date still ahead, if any. */
+  next: { ts: number; kind: number; what: "record" | "pay" } | null;
+  /** Events past their payment date and not fully funded. */
+  debtEvents: number;
+  paidOut: number;
+}
+
+let listCache: { at: number; data: Promise<{ now: number; bonds: BondSummary[] }> } | null = null;
+
+/** Every bond of the program, newest first. Cached briefly: getProgramAccounts is heavy. */
+export function listBonds(): Promise<{ now: number; bonds: BondSummary[] }> {
+  if (listCache && Date.now() - listCache.at < 10_000) return listCache.data;
+  const data = (async () => {
+    const [accs, now] = await Promise.all([program.account.bond.all(), chainTime()]);
+    const bonds = accs.map(({ publicKey, account: b }): BondSummary => {
+      const issued = num(b.issuedUnits) || num(b.supply);
+      const events = b.events.slice(0, b.eventsLen);
+      const upcoming = events
+        .flatMap((e) => [
+          { ts: num(e.recordTs), kind: e.kind, what: "record" as const },
+          { ts: num(e.payTs), kind: e.kind, what: "pay" as const },
+        ])
+        .filter((x) => x.ts > now)
+        .sort((x, y) => x.ts - y.ts);
+      return {
+        bond: publicKey.toBase58(),
+        issuer: b.issuer.toBase58(),
+        bondId: num(b.bondId),
+        couponBps: b.couponBps,
+        faceValue: num(b.faceValue),
+        factorBps: b.factorBps,
+        issuedUnits: issued,
+        supply: num(b.supply),
+        subscriptionOpen: !b.subscriptionClosed && now < num(b.subscriptionEndTs),
+        startTs: num(b.startTs),
+        maturityTs: Math.max(...events.map((e) => num(e.payTs))),
+        next: upcoming[0] ?? null,
+        debtEvents: events.filter((e) => now >= num(e.payTs) && num(e.funded) < num(e.amountPerUnit) * issued).length,
+        paidOut: events.reduce((s, e) => s + num(e.claimed), 0),
+      };
+    });
+    bonds.sort((x, y) => y.startTs - x.startTs);
+    return { now, bonds };
+  })();
+  listCache = { at: Date.now(), data };
+  data.catch(() => (listCache = null));
+  return data;
 }
