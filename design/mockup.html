@@ -1,0 +1,384 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PRITOK — реестр выпуска</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    /* Homage to the KASE palette: graphite ink, green for inflow, red for debt. */
+    --ink: #1e212b;
+    --graphite: #45464f;
+    --muted: #6b6d76;
+    --line: #e2e4e7;
+    --line-strong: #d1d1d1;
+    --bg: #f1f3f4;
+    --surface: #ffffff;
+    --green: #028a29;
+    --green-2: #3cbd0d;
+    --lime: #9ed110;
+    --green-soft: #e6f3e2;
+    --red: #c00008;
+    --red-soft: #fbe9e9;
+    --amber: #a86400;
+    --amber-soft: #fbf1e1;
+    --inflow: linear-gradient(90deg, var(--green) 0%, var(--green-2) 60%, var(--lime) 100%);
+    --radius: 10px;
+    --mono: "JetBrains Mono", ui-monospace, monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 14px/1.45 Manrope, system-ui, sans-serif;
+    font-feature-settings: "tnum" 1;
+  }
+  a { color: inherit; }
+  .wrap { max-width: 1240px; margin: 0 auto; padding: 0 16px; }
+
+  /* Top bar */
+  .top { background: var(--surface); border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 5; }
+  .top .wrap { display: flex; align-items: center; gap: 20px; height: 60px; }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 800; letter-spacing: .08em; }
+  .brand-mark { width: 26px; height: 26px; border-radius: 7px; background: var(--ink); position: relative; overflow: hidden; }
+  .brand-mark::after { content: ""; position: absolute; left: 5px; right: 5px; bottom: 6px; height: 4px; border-radius: 2px; background: var(--inflow); }
+  .brand-mark::before { content: ""; position: absolute; left: 5px; width: 10px; bottom: 13px; height: 4px; border-radius: 2px; background: #fff; opacity: .85; }
+  .brand small { white-space: nowrap; font-weight: 500; letter-spacing: 0; color: var(--muted); margin-left: 4px; }
+  .seg { display: inline-flex; background: var(--bg); border-radius: 8px; padding: 3px; gap: 2px; }
+  .seg button { border: 0; background: transparent; font: inherit; font-weight: 600; font-size: 13px; color: var(--graphite); padding: 6px 12px; border-radius: 6px; cursor: pointer; }
+  .seg button[aria-pressed="true"] { background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px rgba(30,33,43,.12); }
+  .role { display: flex; align-items: center; }
+  .seg-label { white-space: nowrap; font-size: 12px; color: var(--muted); margin-right: 6px; }
+  .spacer { flex: 1; }
+  .clock { white-space: nowrap; display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--graphite); background: var(--amber-soft); border: 1px solid #f0dcc0; padding: 5px 10px; border-radius: 999px; }
+  .clock b { color: var(--ink); font-family: var(--mono); font-weight: 500; }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--amber); animation: pulse 1.6s infinite; }
+  @keyframes pulse { 50% { opacity: .35; } }
+  .lang { white-space: nowrap; font-size: 12px; font-weight: 700; color: var(--muted); }
+  .lang b { color: var(--ink); }
+
+  main { padding: 24px 0 48px; display: grid; gap: 20px; grid-template-columns: minmax(0, 1fr); }
+  main > *, .grid2 > *, .bond > *, .kpis > * { min-width: 0; }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); }
+  .card-h { display: flex; align-items: baseline; gap: 12px; padding: 16px 20px 0; }
+  .card-h h2 { margin: 0; font-size: 15px; font-weight: 700; }
+  .card-h .hint { color: var(--muted); font-size: 12px; }
+  .card-b { padding: 16px 20px 20px; }
+
+  /* Bond header */
+  .bond { display: grid; grid-template-columns: 1.3fr 2fr; gap: 0; }
+  .bond-id { padding: 20px; border-right: 1px solid var(--line); }
+  .issuer { color: var(--muted); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; }
+  .bond-id h1 { margin: 6px 0 10px; font-size: 22px; line-height: 1.2; }
+  .tags { display: flex; flex-wrap: wrap; gap: 6px; }
+  .tag { font-size: 12px; font-weight: 600; padding: 3px 8px; border-radius: 6px; background: var(--bg); color: var(--graphite); }
+  .tag.red { background: var(--red-soft); color: var(--red); }
+  .code { font-family: var(--mono); font-size: 12px; color: var(--muted); margin-top: 12px; }
+  .code a { text-decoration: none; border-bottom: 1px dotted var(--line-strong); }
+  .kpis { display: grid; grid-template-columns: repeat(4, 1fr); }
+  .kpi { padding: 20px; border-left: 1px solid var(--line); }
+  .kpi:first-child { border-left: 0; }
+  .kpi .l { color: var(--muted); font-size: 12px; }
+  .kpi .v { font-size: 20px; font-weight: 700; margin-top: 4px; white-space: nowrap; }
+  .kpi .s { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .kpi .s s { color: var(--muted); }
+  .kpi.debt .v { color: var(--red); }
+
+  /* Timeline */
+  .tl { position: relative; padding: 34px 8px 8px; }
+  .tl-track { position: absolute; left: 8px; right: 8px; top: 48px; height: 6px; border-radius: 3px; background: var(--line); }
+  .tl-fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 3px; background: var(--inflow); }
+  .tl-now { position: absolute; top: -14px; bottom: -14px; width: 2px; background: var(--ink); }
+  .tl-now span { position: absolute; top: -18px; left: 50%; transform: translateX(-50%); font-size: 11px; font-weight: 700; white-space: nowrap; }
+  .tl-points { position: relative; display: grid; grid-template-columns: repeat(6, 1fr); }
+  .tl-p { text-align: center; padding-top: 30px; position: relative; cursor: pointer; }
+  .tl-p::before { content: ""; position: absolute; top: 7px; left: 50%; transform: translateX(-50%); width: 16px; height: 16px; border-radius: 50%; background: var(--surface); border: 3px solid var(--line-strong); }
+  .tl-p.paid::before { border-color: var(--green); background: var(--green); }
+  .tl-p.default::before { border-color: var(--red); background: var(--surface); }
+  .tl-p.default::after { content: "!"; position: absolute; top: 7px; left: 50%; transform: translateX(-50%); width: 16px; line-height: 16px; font-size: 11px; font-weight: 800; color: var(--red); }
+  .tl-p .n { font-weight: 700; font-size: 13px; }
+  .tl-p .d { font-size: 12px; color: var(--muted); }
+  .tl-p .a { font-size: 12px; margin-top: 2px; }
+  .tl-p.paid .a { color: var(--green); }
+  .tl-p.default .a { color: var(--red); font-weight: 600; }
+
+  /* Events + calc */
+  .grid2 { display: grid; grid-template-columns: 1.65fr 1fr; gap: 20px; align-items: start; }
+  table { width: 100%; border-collapse: collapse; }
+  th { text-align: left; font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; padding: 8px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  td { padding: 11px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  th.r, td.r { text-align: right; }
+  tbody tr { cursor: pointer; transition: background .12s; }
+  tbody tr:hover { background: #f7f8f8; }
+  tbody tr[aria-selected="true"] { background: var(--green-soft); }
+  tbody tr:last-child td { border-bottom: 0; }
+  .ev-name { font-weight: 600; }
+  .ev-kind { display: block; font-size: 11px; color: var(--muted); font-weight: 500; }
+  .st { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; padding: 3px 8px; border-radius: 999px; }
+  .st::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+  .st.paid { color: var(--green); background: var(--green-soft); }
+  .st.default { color: var(--red); background: var(--red-soft); }
+  .st.planned { color: var(--graphite); background: var(--bg); }
+  .bar { height: 4px; border-radius: 2px; background: var(--line); margin-top: 5px; overflow: hidden; }
+  .bar i { display: block; height: 100%; background: var(--green); }
+  .bar.red i { background: var(--red); }
+
+  .calc h3 { margin: 0 0 2px; font-size: 16px; }
+  .calc .sub { color: var(--muted); font-size: 12px; margin-bottom: 14px; }
+  .formula { background: var(--bg); border-radius: 8px; padding: 12px 14px; font-size: 13px; margin-bottom: 14px; }
+  .formula b { font-weight: 700; }
+  .line { display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; padding: 10px 0; border-bottom: 1px dashed var(--line); }
+  .line:last-child { border-bottom: 0; }
+  .line .who { font-weight: 600; }
+  .line .eq { color: var(--muted); font-size: 12px; font-family: var(--mono); }
+  .line .sum { text-align: right; font-weight: 700; }
+  .line .tx { text-align: right; font-size: 12px; }
+  .line .tx a { color: var(--green); text-decoration: none; font-weight: 600; }
+  .line .tx .pending { color: var(--red); font-weight: 600; }
+  .total { display: flex; justify-content: space-between; padding-top: 12px; margin-top: 4px; border-top: 1px solid var(--line-strong); font-weight: 700; }
+  .note { font-size: 12px; color: var(--muted); margin-top: 12px; }
+  .note.red { color: var(--red); }
+
+  /* Registry at date */
+  .reg-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 16px 20px 0; }
+  .reg-head h2 { margin: 0; font-size: 15px; }
+  .who-cell { display: flex; align-items: center; gap: 10px; }
+  .avatar { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; font-weight: 800; color: #fff; background: var(--graphite); }
+  .addr { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+  .share { display: flex; align-items: center; gap: 10px; min-width: 160px; }
+  .share .bar { flex: 1; margin: 0; height: 6px; }
+  .share .bar i { background: var(--inflow); }
+  .delta { font-size: 12px; font-weight: 700; }
+  .delta.up { color: var(--green); }
+  .delta.down { color: var(--red); }
+  .transfers { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); font-size: 13px; color: var(--graphite); display: grid; gap: 6px; }
+  .transfers .t { display: flex; gap: 10px; align-items: baseline; }
+  .transfers .when { font-family: var(--mono); font-size: 12px; color: var(--muted); min-width: 92px; }
+  .chip { font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 6px; }
+  .chip.before { background: var(--green-soft); color: var(--green); }
+  .chip.after { background: var(--amber-soft); color: var(--amber); }
+
+  footer { color: var(--muted); font-size: 12px; padding: 0 0 32px; display: flex; gap: 16px; flex-wrap: wrap; justify-content: space-between; }
+
+  @media (max-width: 1180px) {
+    .brand small, .clock-long { display: none; }
+  }
+  @media (max-width: 980px) {
+    .bond, .grid2 { grid-template-columns: 1fr; }
+    .bond-id { border-right: 0; border-bottom: 1px solid var(--line); }
+    .kpis { grid-template-columns: repeat(2, 1fr); }
+    .kpi:nth-child(3) { border-left: 0; }
+    .kpi:nth-child(n+3) { border-top: 1px solid var(--line); }
+  }
+  @media (max-width: 720px) {
+    .top .wrap { height: auto; flex-wrap: wrap; padding-top: 10px; padding-bottom: 10px; gap: 10px; }
+    .spacer { display: none; }
+    .seg-label { display: none; }
+    .tl-points { grid-template-columns: repeat(3, 1fr); row-gap: 18px; }
+    .tl-track, .tl-now { display: none; }
+    .scroll { overflow-x: auto; }
+    .role { max-width: 100%; overflow-x: auto; }
+    .kpis { grid-template-columns: 1fr 1fr; }
+    .kpi { padding: 14px 16px; }
+    .kpi .v { font-size: 17px; }
+  }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap">
+    <div class="brand"><span class="brand-mark"></span>PRITOK<small>реестр и выплаты</small></div>
+    <div class="role"><span class="seg-label">Смотреть как</span>
+      <div class="seg" role="group" aria-label="Роль">
+        <button aria-pressed="true">Публика</button>
+        <button aria-pressed="false">Эмитент</button>
+        <button aria-pressed="false">Регистратор</button>
+        <button aria-pressed="false">Инвестор</button>
+      </div>
+    </div>
+    <div class="spacer"></div>
+    <div class="clock" title="Время в демо ускорено: 1 полугодие = 150 секунд"><span class="dot"></span><span class="clock-long">Ускоренное время · 1 полугодие = 150 с ·</span> до фиксации купона 4 <b>01:12</b></div>
+    <div class="lang"><b>RU</b> · EN · KZ</div>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <section class="card bond">
+    <div class="bond-id">
+      <div class="issuer">ТОО «СтепьЛогистик» · тестовый эмитент</div>
+      <h1>Облигации 16% · 2 года · амортизируемые</h1>
+      <div class="tags">
+        <span class="tag">Купон 2 раза в год</span>
+        <span class="tag">Выплаты в tKZT</span>
+        <span class="tag">Solana devnet</span>
+        <span class="tag red">Технический дефолт по купону 3</span>
+      </div>
+      <div class="code">Код выпуска <a href="https://explorer.solana.com/address/2dwYhfHkJCpuwrhYBCvZpLYEzrbkVHzW2tyjzMNXu8RG?cluster=devnet" target="_blank" rel="noopener">2dwY…u8RG ↗</a></div>
+    </div>
+    <div class="kpis">
+      <div class="kpi"><div class="l">Номинал облигации</div><div class="v">80 000 ₸</div><div class="s"><s>100 000</s> · погашено 20%</div></div>
+      <div class="kpi"><div class="l">В обращении</div><div class="v">1 000 шт.</div><div class="s">3 держателя</div></div>
+      <div class="kpi"><div class="l">Выплачено держателям</div><div class="v" style="color:var(--green)">36 000 000 ₸</div><div class="s">купоны 1–2 и амортизация</div></div>
+      <div class="kpi debt"><div class="l">Долг эмитента</div><div class="v">1 600 000 ₸</div><div class="s">купон 3, срок прошёл</div></div>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-h"><h2>Жизнь выпуска</h2><span class="hint">даты фиксации реестра и выплат</span></div>
+    <div class="tl">
+      <div class="tl-track"><div class="tl-fill" style="width:64%"></div><div class="tl-now" style="left:64%"><span>сегодня</span></div></div>
+      <div class="tl-points" id="tl"></div>
+    </div>
+  </section>
+
+  <div class="grid2">
+    <section class="card">
+      <div class="card-h"><h2>Корпоративные действия</h2><span class="hint">нажмите на строку — покажем расчёт</span></div>
+      <div class="card-b scroll">
+        <table>
+          <thead><tr><th>Событие</th><th>Фиксация</th><th>Выплата</th><th class="r">На облигацию</th><th class="r">Нужно</th><th class="r">Внесено</th><th>Статус</th></tr></thead>
+          <tbody id="events"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <aside class="card calc" aria-live="polite">
+      <div class="card-b" id="calc"></div>
+    </aside>
+  </div>
+
+  <section class="card">
+    <div class="reg-head">
+      <h2>Реестр держателей на дату</h2>
+      <div class="seg" role="group" aria-label="Дата реестра" id="regdates"></div>
+    </div>
+    <div class="card-b scroll">
+      <table>
+        <thead><tr><th>Держатель</th><th class="r">Облигаций</th><th>Доля</th><th class="r">Изменение</th></tr></thead>
+        <tbody id="registry"></tbody>
+      </table>
+      <div class="transfers" id="transfers"></div>
+    </div>
+  </section>
+
+  <footer>
+    <span>PRITOK — независимый прототип для трека Superteam Kazakhstan × KASE. Не аффилирован с KASE.</span>
+    <span>Программа <a class="addr" href="https://explorer.solana.com/address/9LMSMqD3xMBaNdfRb4bKDT3MBTX8ry1Na84rMSJ787aY?cluster=devnet" target="_blank" rel="noopener">9LMS…787aY ↗</a></span>
+  </footer>
+</main>
+
+<script>
+const TX = (sig) => `https://explorer.solana.com/tx/${sig}?cluster=devnet`;
+const fmt = (n) => n.toLocaleString("ru-RU").replace(/,/g, " ");
+
+const holders = [
+  { id: "a", name: "Айгерим С.", addr: "2Yk6…r2yq", color: "#028a29" },
+  { id: "b", name: "Болат Н.", addr: "DXsp…pbpi", color: "#45464f" },
+  { id: "f", name: "Фонд «Жібек»", addr: "4azB…qhXh", color: "#1e212b" },
+];
+
+// Record-date balances from the devnet run.
+const snapshots = {
+  "Купон 1 · 29.03.2027": { a: 290, b: 210, f: 500 },
+  "Купон 2 · 28.09.2027": { a: 290, b: 200, f: 510 },
+  "Сейчас": { a: 290, b: 200, f: 510 },
+};
+
+const events = [
+  { n: "Купон 1", k: "купон 8% за полугодие", rec: "29.03.2027", pay: "01.04.2027", per: 8000, req: 8000000, fund: 8000000, st: "paid", snap: "Купон 1 · 29.03.2027",
+    tx: { a: "VBsaEbfcQFodA8btRkgJaNuL53reSp1ZXi1aNeNumzTYg9ASj6i4oYT6Dnc3kJAfnnor3WtiPMKsbppM2MCPVrc", b: "5RAZkDz459SfZfHYEvQzz1uvaVK7nEScp2zcgKNzMU2DjgzoRe9ugfazvt7t7qxdBHDTLrE2ScccBHCJQh7qYZVL", f: "5tQLC3LT8yK8Rpbe6ftWa6db9j5egwojVmtArVcXytVHcy2Vyhc2Ce9wy2tHn4WC5axbiavuRk1LwASFiqzPrM5f" },
+    note: "Болат передал 10 облигаций Фонду уже после фиксации — купон за них получил Болат." },
+  { n: "Купон 2", k: "на номинал 100 000", rec: "28.09.2027", pay: "01.10.2027", per: 8000, req: 8000000, fund: 8000000, st: "paid", snap: "Купон 2 · 28.09.2027",
+    tx: { a: "5HmXdoSEJLWqe9CTT4W129tXQDzsPvB1b9oqWGCDSeo9pSMsHnwtMmj2ud4S4MxshyULEdhVseRx4wya4BpzweBt", b: "2bpBUdAuDMk82RCvUXZVJLUuYfNpHCwXd7kxwn39mTXB86diEoJL8cPbjWaBDXVXeXbjqr7PSSKghia1xdi7aF2f", f: "21z2rHpYneaGWCsZ4A2KPPx2SLviwzYRXRpvasahUQEtkB69tqhVPSyc4gNHZcpUE5tzGRfBp54dirzh53PEMjTE" },
+    note: "Купон начислен на номинал, который был в обращении весь период: 100 000." },
+  { n: "Амортизация 20%", k: "частичное погашение", rec: "28.09.2027", pay: "01.10.2027", per: 20000, req: 20000000, fund: 20000000, st: "paid", snap: "Купон 2 · 28.09.2027",
+    tx: { a: "2QiDsGpfTqJHaLH8dSr5TQTonFTyMaQrCinqNFFg6BQ96SZJNoyhkeygrt8nd4jrvYvJK3NW1sfZL4CtKmJjRMYp", b: "3DCmLQyRzLDwWvFzw3TkPfdycrWeCEQ9xmSVGW7sdhhoviK7ETfcBGinx7EigmzBWKxDo8miYiLnW4JKsD87Fz1R", f: "2L8NtFewNgjtvY4pYgEcMVNTMR8Yp7SYMHVZAPKAxesCPr6bAkMr3Xxs4nBEpncTUpEkvzi8isY67c4ozYZM7b98" },
+    note: "Эмитент внёс 20 000 000 ₸ в момент объявления. Номинал стал 80 000, купоны 3–4 пересчитаны." },
+  { n: "Купон 3", k: "на номинал 80 000", rec: "29.03.2028", pay: "01.04.2028", per: 6400, req: 6400000, fund: 4800000, st: "default", snap: "Сейчас",
+    note: "Эмитент внёс 75%. Выплаты закрыты, пока долг 1 600 000 ₸ не погашен полностью — частично долг не списывается." },
+  { n: "Купон 4", k: "на номинал 80 000", rec: "28.09.2028", pay: "01.10.2028", per: 6400, req: 6400000, fund: 0, st: "planned", snap: "Сейчас",
+    note: "Будет выплачен вместе с номиналом при погашении." },
+  { n: "Погашение", k: "номинал 80 000", rec: "28.09.2028", pay: "01.10.2028", per: 80000, req: 80000000, fund: 0, st: "planned", snap: "Сейчас",
+    note: "С даты фиксации переводы закрыты. Держатель сдаёт облигации — они сжигаются — и получает номинал." },
+];
+
+const stLabel = { paid: "Выплачено", default: "Дефолт", planned: "Запланировано" };
+
+document.getElementById("tl").innerHTML = events.map((e, i) => `
+  <div class="tl-p ${e.st}" data-i="${i}">
+    <div class="n">${e.n}</div><div class="d">${e.pay}</div>
+    <div class="a">${e.st === "default" ? "долг " + fmt(e.req - e.fund) + " ₸" : fmt(e.per) + " ₸"}</div>
+  </div>`).join("");
+
+document.getElementById("events").innerHTML = events.map((e, i) => {
+  const pct = Math.round((e.fund / e.req) * 100);
+  return `<tr data-i="${i}">
+    <td><span class="ev-name">${e.n}</span><span class="ev-kind">${e.k}</span></td>
+    <td>${e.rec}</td><td>${e.pay}</td>
+    <td class="r">${fmt(e.per)} ₸</td>
+    <td class="r">${fmt(e.req)}</td>
+    <td class="r">${fmt(e.fund)}<div class="bar ${e.st === "default" ? "red" : ""}"><i style="width:${pct}%"></i></div></td>
+    <td><span class="st ${e.st}">${stLabel[e.st]}</span></td>
+  </tr>`;
+}).join("");
+
+function showCalc(i) {
+  const e = events[i];
+  document.querySelectorAll("#events tr").forEach((r) => r.setAttribute("aria-selected", r.dataset.i == i));
+  const snap = snapshots[e.snap];
+  const lines = holders.map((h) => {
+    const units = snap[h.id];
+    const sum = units * e.per;
+    const tx = e.tx?.[h.id];
+    const right = tx
+      ? `<a href="${TX(tx)}" target="_blank" rel="noopener">выплачено ↗</a>`
+      : e.st === "default" ? `<span class="pending">ждёт погашения долга</span>` : `<span style="color:var(--muted)">к выплате ${e.pay}</span>`;
+    return `<div class="line"><div class="who">${h.name}</div><div class="sum">${fmt(sum)} ₸</div>
+      <div class="eq">${units} обл. × ${fmt(e.per)} ₸</div><div class="tx">${right}</div></div>`;
+  }).join("");
+  const total = holders.reduce((s, h) => s + snap[h.id] * e.per, 0);
+  document.getElementById("calc").innerHTML = `
+    <h3>${e.n}</h3>
+    <div class="sub">фиксация ${e.rec} · выплата ${e.pay}</div>
+    <div class="formula">Сумма = <b>облигаций на дату фиксации</b> × <b>${fmt(e.per)} ₸</b> на облигацию</div>
+    ${lines}
+    <div class="total"><span>Итого держателям</span><span>${fmt(total)} ₸</span></div>
+    <div class="note ${e.st === "default" ? "red" : ""}">${e.note}</div>`;
+}
+
+const regdates = Object.keys(snapshots);
+function showRegistry(key) {
+  document.querySelectorAll("#regdates button").forEach((b) => b.setAttribute("aria-pressed", b.textContent === key));
+  const snap = snapshots[key];
+  const prev = snapshots[regdates[Math.max(0, regdates.indexOf(key) - 1)]];
+  const initial = { a: 300, b: 200, f: 500 };
+  const base = key === regdates[0] ? initial : prev;
+  document.getElementById("registry").innerHTML = holders.map((h) => {
+    const d = snap[h.id] - base[h.id];
+    return `<tr><td><div class="who-cell"><span class="avatar" style="background:${h.color}">${h.name[0]}</span><div><div style="font-weight:600">${h.name}</div><div class="addr">${h.addr}</div></div></div></td>
+      <td class="r" style="font-weight:700">${snap[h.id]}</td>
+      <td><div class="share"><div class="bar"><i style="width:${snap[h.id] / 10}%"></i></div><span>${(snap[h.id] / 10).toFixed(1)}%</span></div></td>
+      <td class="r">${d ? `<span class="delta ${d > 0 ? "up" : "down"}">${d > 0 ? "+" : ""}${d}</span>` : `<span style="color:var(--muted)">—</span>`}</td></tr>`;
+  }).join("");
+}
+document.getElementById("regdates").innerHTML = regdates.map((k) => `<button aria-pressed="false">${k}</button>`).join("");
+document.getElementById("regdates").addEventListener("click", (ev) => ev.target.tagName === "BUTTON" && showRegistry(ev.target.textContent));
+document.getElementById("transfers").innerHTML = `
+  <div class="t"><span class="when">27.03.2027</span><span class="chip before">до фиксации</span><span>Айгерим → Болат, 10 обл. — купон 1 переходит к Болату</span></div>
+  <div class="t"><span class="when">30.03.2027</span><span class="chip after">после фиксации</span><span>Болат → Фонд «Жібек», 10 обл. — купон 1 остаётся у Болата</span></div>`;
+
+document.getElementById("events").addEventListener("click", (ev) => { const r = ev.target.closest("tr"); if (r) showCalc(+r.dataset.i); });
+document.getElementById("tl").addEventListener("click", (ev) => { const p = ev.target.closest(".tl-p"); if (p) showCalc(+p.dataset.i); });
+document.querySelectorAll(".top .seg button").forEach((b) => b.addEventListener("click", () => {
+  document.querySelectorAll(".top .seg button").forEach((x) => x.setAttribute("aria-pressed", x === b));
+}));
+
+showCalc(0);
+showRegistry(regdates[0]);
+</script>
+</body>
+</html>
