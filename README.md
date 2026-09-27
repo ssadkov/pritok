@@ -13,7 +13,8 @@ Built for the Superteam Kazakhstan × KASE side track [*Corporate Actions on Blo
 | Program | deployed to **devnet**: [`9LMSMqD3xMBaNdfRb4bKDT3MBTX8ry1Na84rMSJ787aY`](https://explorer.solana.com/address/9LMSMqD3xMBaNdfRb4bKDT3MBTX8ry1Na84rMSJ787aY?cluster=devnet) |
 | Tests | 15 passing (6 unit, 9 LiteSVM integration) |
 | Devnet run | full bond lifecycle, 40 transactions — bond [`2dwYhf…u8RG`](https://explorer.solana.com/address/2dwYhfHkJCpuwrhYBCvZpLYEzrbkVHzW2tyjzMNXu8RG?cluster=devnet) |
-| Not yet built | bank settlement path, holder revocation and pause, DvP trade with accrued interest, web UI |
+| Web | live public registry (`web/`, Next.js) reading devnet |
+| Not yet built | bank settlement path, holder revocation and pause, DvP trade with accrued interest, issuer/investor/registrar screens |
 
 ## Corporate actions
 
@@ -47,6 +48,7 @@ Built for the Superteam Kazakhstan × KASE side track [*Corporate Actions on Blo
 ```
 programs/pritok/     Anchor program + LiteSVM tests
 client/              TypeScript client and the devnet scenario
+web/                 Next.js app: public registry on live devnet data
 docs/PLAN.md         plan and design decisions (Russian)
 docs/REVIEW-BRIEF.md brief for independent design review
 scripts/wsl-test.sh  build + test inside the WSL filesystem
@@ -71,3 +73,13 @@ npm run scenario
 ```
 
 The first run creates role keys in `client/.keys` (gitignored) and asks you to fund the payer with 1 devnet SOL. The run takes about 11 minutes and writes every transaction link to `client/out/`.
+
+## Web
+
+```bash
+cd web && npm install
+cp .env.example .env.local   # set RPC_URL to a dedicated devnet RPC
+npm run dev                  # http://localhost:3100
+```
+
+The public devnet RPC rate-limits the registry reads (holder and receipt accounts plus transaction history); use a dedicated endpoint such as Helius devnet.

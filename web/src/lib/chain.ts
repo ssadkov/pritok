@@ -69,7 +69,8 @@ async function history(bond: PublicKey): Promise<OpView[]> {
       const txs = await Promise.all(
         batch.map((sig) => connection.getParsedTransaction(sig, { maxSupportedTransactionVersion: 0 })),
       );
-      batch.forEach((sig, j) => opCache.set(sig, decodeOp(sig, txs[j])));
+      // A null response means the node has not indexed the tx yet: retry on the next poll.
+      batch.forEach((sig, j) => txs[j] && opCache.set(sig, decodeOp(sig, txs[j])));
     }
   } catch (e) {
     console.warn(`history for ${key}: ${(e as Error).message}`);
