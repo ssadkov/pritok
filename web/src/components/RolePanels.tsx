@@ -7,6 +7,7 @@ import {
   CLAIM,
   KIND,
   STATUS,
+  accruedPerUnit,
   count,
   dateTime,
   eventTitle,
@@ -198,6 +199,9 @@ export function InvestorPanel({ bond, a, who, setWho }: { bond: BondView; a: Act
   const [to, setTo] = useState<string>("");
   const [units, setUnits] = useState(10);
   const [subUnits, setSubUnits] = useState(100);
+  const [sellTo, setSellTo] = useState<Investor | "">("");
+  const [sellUnits, setSellUnits] = useState(10);
+  const [pricePct, setPricePct] = useState(99);
   if (!me) return null;
 
   const others = investors.filter((i) => i.key !== me.key);
@@ -242,6 +246,7 @@ export function InvestorPanel({ bond, a, who, setWho }: { bond: BondView; a: Act
             </div>
           </div>
           {!holder?.allowed && <p className="red small">Регистратор ещё не допустил этот кошелёк.</p>}
+          <PayoutCalendar bond={bond} balance={holder?.balance ?? 0} />
           <h4>Выплаты</h4>
           {claimable.length === 0 && <p className="muted">Пока нет зафиксированных выплат.</p>}
           {claimable.map(({ e, units, claim, amount }) => {
@@ -300,7 +305,21 @@ export function InvestorPanel({ bond, a, who, setWho }: { bond: BondView; a: Act
               </Btn>
             </>
           )}
-          <h4>Перевод облигаций</h4>
+          <SaleForm
+            bond={bond}
+            a={a}
+            me={me.key}
+            others={others}
+            balance={holder?.balance ?? 0}
+            open={transfersOpen}
+            buyer={sellTo || others[0]?.key}
+            setBuyer={setSellTo}
+            units={sellUnits}
+            setUnits={setSellUnits}
+            pricePct={pricePct}
+            setPricePct={setPricePct}
+          />
+          <h4>Перевод без оплаты</h4>
           {transfersOpen ? (
             <>
               <div className="form-row">
@@ -488,5 +507,143 @@ export function OperatorPanel({ bond, a }: { bond: BondView; a: Act }) {
         </div>
       </div>
     </section>
+  );
+}
+
+// ------------------------------------------------------------------ sale (DvP)
+
+function SaleForm({
+  bond,
+  a,
+  me,
+  others,
+  balance,
+  open,
+  buyer,
+  setBuyer,
+  units,
+  setUnits,
+  pricePct,
+  setPricePct,
+}: {
+  bond: BondView;
+  a: Act;
+  me: Investor;
+  others: { key: Investor; address: string; tkzt: number }[];
+  balance: number;
+  open: boolean;
+  buyer: Investor | undefined;
+  setBuyer: (b: Investor) => void;
+  units: number;
+  setUnits: (n: number) => void;
+  pricePct: number;
+  setPricePct: (n: number) => void;
+}) {
+  const q = accruedPerUnit(bond, bond.now);
+  const buyerInfo = others.find((o) => o.key === buyer);
+  return (
+    <>
+      <h4>
+        Продажа облигаций{" "}
+        <Term tip="Поставка против оплаты: облигации уходят покупателю, деньги — продавцу в одной транзакции, одно без другого невозможно. Цену в % от номинала задают стороны, НКД — накопленный купонный доход — считает программа." />
+      </h4>
+      {!open || !q ? (
+        <p className="muted">После даты фиксации погашения сделки закрыты.</p>
+      ) : (
+        <>
+          <div className="form-row">
+            <label>
+              Покупатель
+              <select value={buyer} onChange={(ev) => setBuyer(ev.target.value as Investor)}>
+                {others.map((i) => (
+                  <option key={i.key} value={i.key}>
+                    {label(i.address)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Облигаций
+              <input type="number" min={1} value={units} onChange={(ev) => setUnits(Number(ev.target.value))} />
+            </label>
+            <label>
+              Цена, % номинала
+              <input type="number" min={1} max={150} step={0.1} value={pricePct} onChange={(ev) => setPricePct(Number(ev.target.value))} />
+            </label>
+          </div>
+          {(() => {
+            const clean = Math.floor((q.face * Math.round(pricePct * 100)) / 10_000);
+            const perUnit = clean + q.accrued;
+            const total = perUnit * units;
+            return (
+              <div className="deal">
+                <div>
+                  <span className="muted">Цена</span> {money(q.face)} × {pricePct}% = <b>{money(clean)} ₸</b>
+                </div>
+                <div>
+                  <span className="muted">НКД</span>{" "}
+                  {q.accrued ? (
+                    <b>{money(q.accrued)} ₸</b>
+                  ) : (
+                    <span className="amber">0 — реестр для ближайшего купона зафиксирован, купон останется у продавца</span>
+                  )}
+                </div>
+                <div className="deal-total">
+                  За облигацию {money(perUnit)} ₸ · итого <b>{money(total)} ₸</b>
+                </div>
+                {buyerInfo && buyerInfo.tkzt < total && <div className="red small">У покупателя на счёте {money(buyerInfo.tkzt)} ₸ — не хватит.</div>}
+              </div>
+            );
+          })()}
+          <Btn
+            a={a}
+            id="sell"
+            disabled={!balance || !buyer}
+            onClick={() =>
+              a.act("sell", `Сделка: ${count(units)} обл. по ${pricePct}% + НКД`, {
+                type: "trade",
+                who: me,
+                buyer,
+                units,
+                priceBps: Math.round(pricePct * 100),
+              })
+            }
+          >
+            Продать — поставка против оплаты
+          </Btn>
+          <p className="muted small" style={{ marginTop: 8 }}>
+            В демо обе подписи ставит сервер; в жизни продавец и покупатель подписывают одну транзакцию каждый у себя.
+          </p>
+        </>
+      )}
+    </>
+  );
+}
+
+// ------------------------------------------------------------------ payout calendar
+
+/** What the investor will receive and when, at the current balance. */
+function PayoutCalendar({ bond, balance }: { bond: BondView; balance: number }) {
+  const upcoming = bond.events.filter((e) => e.payTs > bond.now);
+  if (!upcoming.length || !balance) return null;
+  const total = upcoming.reduce((s, e) => s + e.amountPerUnit * balance, 0);
+  return (
+    <>
+      <h4>Календарь выплат</h4>
+      <div className="calendar">
+        {upcoming.map((e) => (
+          <div className="cal-row" key={e.pos}>
+            <span className="when">{dateTime(e.payTs)}</span>
+            <span>{eventTitle(bond, e)}</span>
+            <b>{money(e.amountPerUnit * balance)} ₸</b>
+          </div>
+        ))}
+        <div className="cal-row total">
+          <span />
+          <span>Всего впереди при текущем балансе</span>
+          <b>{money(total)} ₸</b>
+        </div>
+      </div>
+    </>
   );
 }

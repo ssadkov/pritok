@@ -1,5 +1,5 @@
 // Server-only: reads a bond and its history from Solana and builds a BondView.
-import { BorshInstructionCoder, Program, type Idl } from "@coral-xyz/anchor";
+import { BorshCoder, BorshInstructionCoder, EventParser, Program, type Idl } from "@coral-xyz/anchor";
 import { Connection, PublicKey, type ParsedTransactionWithMeta } from "@solana/web3.js";
 import idl from "@/idl/pritok.json";
 import type { Pritok } from "@/idl/pritok";
@@ -10,6 +10,7 @@ const RPC = process.env.RPC_URL ?? "https://api.devnet.solana.com";
 const connection = new Connection(RPC, "confirmed");
 const program = new Program<Pritok>(idl as Pritok, { connection });
 const coder = new BorshInstructionCoder(idl as Idl);
+const events = new EventParser(program.programId, new BorshCoder(idl as Idl));
 
 const num = (v: { toNumber(): number } | number) => (typeof v === "number" ? v : v.toNumber());
 
@@ -54,6 +55,20 @@ function decodeOp(sig: string, tx: ParsedTransactionWithMeta | null): OpView | n
       return { ...base, actor: acc[0], counterparty: acc[3], actionId: n("action_id") };
     case "revoke_holder":
       return { ...base, actor: acc[0], counterparty: acc[2] };
+    case "trade_dvp": {
+      // Price and accrued interest come from the program's TradeSettled event.
+      let settled: Record<string, { toNumber(): number } | number> | undefined;
+      for (const ev of events.parseLogs(tx.meta?.logMessages ?? [])) if (ev.name === "tradeSettled" || ev.name === "TradeSettled") settled = ev.data as never;
+      return {
+        ...base,
+        actor: acc[0],
+        counterparty: acc[1],
+        units: n("units"),
+        cleanPriceBps: n("clean_price_bps"),
+        amount: settled ? num(settled.total as never) : undefined,
+        accruedPerUnit: settled ? num((settled.accrued_per_unit ?? settled.accruedPerUnit) as never) : undefined,
+      };
+    }
     default:
       return base;
   }

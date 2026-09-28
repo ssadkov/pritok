@@ -11,11 +11,10 @@ Built for the Superteam Kazakhstan × KASE side track [*Corporate Actions on Blo
 | | |
 |---|---|
 | Program | deployed to **devnet**: [`9LMSMqD3xMBaNdfRb4bKDT3MBTX8ry1Na84rMSJ787aY`](https://explorer.solana.com/address/9LMSMqD3xMBaNdfRb4bKDT3MBTX8ry1Na84rMSJ787aY?cluster=devnet) |
-| Tests | 17 passing (6 unit, 11 LiteSVM integration) |
+| Tests | 19 passing (7 unit, 12 LiteSVM integration) |
 | Devnet run | full bond lifecycle, 40 transactions — bond [`2dwYhf…u8RG`](https://explorer.solana.com/address/2dwYhfHkJCpuwrhYBCvZpLYEzrbkVHzW2tyjzMNXu8RG?cluster=devnet) |
 | Web | live public registry (`web/`, Next.js) reading devnet |
 | Web | role screens: issuer, investor, registrar / paying agent (devnet demo signing) |
-| Not yet built | DvP trade with accrued interest |
 
 ## Corporate actions
 
@@ -25,6 +24,7 @@ Built for the Superteam Kazakhstan × KASE side track [*Corporate Actions on Blo
 | **Partial redemption** (extra action) | Declared by the issuer on the date of a future coupon and funded in the same transaction. Later coupons and maturity are recalculated on the reduced face value. |
 | **Maturity** | Transfers close at the maturity record date. `redeem` burns the holder's bonds and pays principal plus the last coupon in one transaction. |
 | **Bank payout** | Instead of claiming to a wallet, a holder (or the registrar for a holder without a wallet) sends the payout to the paying agent. The money leaves the vault onchain; the agent then attests the bank transfer, storing only a SHA-256 of the payment reference. A payout goes to the wallet or to the bank, once. |
+| **Secondary trade (DvP)** | Seller and buyer sign one transaction: bonds to the buyer, money to the seller, atomically. They agree the clean price as a share of the outstanding face; the program adds accrued interest itself (zero between a coupon's record and payment dates — the coupon stays with the seller) and enforces the buyer's price limit. |
 | **Default** | If an event is underfunded on its payment date, anyone can mark it defaulted. Claims stay closed until the issuer pays the full amount; the debt is never written down. |
 
 ## Design

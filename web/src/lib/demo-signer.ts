@@ -7,7 +7,7 @@ import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { BondClient, makeProgram } from "./pritok-client";
-import { KIND, type BondView, type DemoInfo } from "./view";
+import { KIND, accruedPerUnit, type BondView, type DemoInfo } from "./view";
 
 const RPC = process.env.RPC_URL ?? "https://api.devnet.solana.com";
 const CLUSTER = process.env.NEXT_PUBLIC_CLUSTER ?? "devnet";
@@ -73,7 +73,8 @@ export type Action =
   | { type: "claimToBank"; who: Investor; actionId: number }
   | { type: "confirmBank"; owner: string; actionId: number; reference: string }
   | { type: "revoke"; owner: string }
-  | { type: "pause"; paused: boolean };
+  | { type: "pause"; paused: boolean }
+  | { type: "trade"; who: Investor; buyer: Investor; units: number; priceBps: number };
 
 export async function perform(bond: BondView, a: Action): Promise<string> {
   const { conn, keys } = ctx();
@@ -121,6 +122,15 @@ export async function perform(bond: BondView, a: Action): Promise<string> {
       return c.revokeHolder(keys.operator, new PublicKey(a.owner));
     case "pause":
       return BondClient.setPaused(program, keys.operator, a.paused);
+    case "trade": {
+      // Both parties are demo wallets here; in production each signs on its own device.
+      const q = accruedPerUnit(bond, bond.now);
+      if (!q) throw new Error("Купонов впереди нет — сделки закрыты");
+      const perUnit = Math.floor((q.face * a.priceBps) / 10_000) + q.accrued;
+      // Accrued interest grows while the transaction is in flight: allow 0.5% on top of the quote.
+      const maxTotal = BigInt(Math.ceil(perUnit * a.units * 1.005));
+      return c.trade(inv(a.who), inv(a.buyer), a.units, a.priceBps, maxTotal);
+    }
   }
 }
 
@@ -146,6 +156,8 @@ const ERRORS: Record<string, string> = {
   EmptyBankRef: "Укажите номер платёжного поручения",
   NotHolderOrOperator: "Запросить выплату в банк может только держатель или регистратор",
   NotOperator: "Действие доступно только регистратору",
+  PriceAboveLimit: "Итоговая сумма выше лимита покупателя",
+  InvalidPrice: "Цена должна быть больше нуля",
 };
 
 /** Anchor/RPC error → short Russian message; a repeated claim shows as "already in use". */

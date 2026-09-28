@@ -1411,6 +1411,163 @@
       ]
     },
     {
+      "name": "trade_dvp",
+      "discriminator": [
+        30,
+        145,
+        134,
+        229,
+        248,
+        21,
+        170,
+        83
+      ],
+      "accounts": [
+        {
+          "name": "seller",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "buyer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "bond"
+        },
+        {
+          "name": "seller_holder",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  104,
+                  111,
+                  108,
+                  100,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "bond"
+              },
+              {
+                "kind": "account",
+                "path": "seller"
+              }
+            ]
+          }
+        },
+        {
+          "name": "buyer_holder",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  104,
+                  111,
+                  108,
+                  100,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "bond"
+              },
+              {
+                "kind": "account",
+                "path": "buyer"
+              }
+            ]
+          }
+        },
+        {
+          "name": "bond_mint",
+          "relations": [
+            "bond"
+          ]
+        },
+        {
+          "name": "seller_bond_ata",
+          "writable": true
+        },
+        {
+          "name": "buyer_bond_ata",
+          "writable": true
+        },
+        {
+          "name": "payment_mint",
+          "relations": [
+            "bond"
+          ]
+        },
+        {
+          "name": "buyer_payment",
+          "writable": true
+        },
+        {
+          "name": "seller_payment",
+          "writable": true
+        },
+        {
+          "name": "bond_token_program",
+          "address": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
+        },
+        {
+          "name": "payment_token_program"
+        },
+        {
+          "name": "associated_token_program",
+          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "units",
+          "type": "u64"
+        },
+        {
+          "name": "clean_price_bps",
+          "type": "u16"
+        },
+        {
+          "name": "max_total",
+          "type": "u64"
+        }
+      ]
+    },
+    {
       "name": "transfer_bond",
       "discriminator": [
         0,
@@ -1595,6 +1752,21 @@
       ]
     }
   ],
+  "events": [
+    {
+      "name": "TradeSettled",
+      "discriminator": [
+        22,
+        119,
+        166,
+        225,
+        175,
+        53,
+        93,
+        216
+      ]
+    }
+  ],
   "errors": [
     {
       "code": 6000,
@@ -1745,6 +1917,16 @@
       "code": 6029,
       "name": "EmptyBankRef",
       "msg": "Bank payment reference is empty"
+    },
+    {
+      "code": 6030,
+      "name": "InvalidPrice",
+      "msg": "Price must be positive"
+    },
+    {
+      "code": 6031,
+      "name": "PriceAboveLimit",
+      "msg": "Total price exceeds the buyer's limit"
     }
   ],
   "types": [
@@ -2084,6 +2266,49 @@
           {
             "name": "bump",
             "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "TradeSettled",
+      "docs": [
+        "Settlement record in the transaction log: price, accrued interest and total."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "bond",
+            "type": "pubkey"
+          },
+          {
+            "name": "seller",
+            "type": "pubkey"
+          },
+          {
+            "name": "buyer",
+            "type": "pubkey"
+          },
+          {
+            "name": "units",
+            "type": "u64"
+          },
+          {
+            "name": "clean_price_bps",
+            "type": "u16"
+          },
+          {
+            "name": "clean_per_unit",
+            "type": "u64"
+          },
+          {
+            "name": "accrued_per_unit",
+            "type": "u64"
+          },
+          {
+            "name": "total",
+            "type": "u64"
           }
         ]
       }

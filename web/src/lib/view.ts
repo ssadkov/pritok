@@ -50,6 +50,9 @@ export interface OpView {
   units?: number;
   amount?: number;
   actionId?: number;
+  /** trade_dvp: agreed clean price and program-computed accrued interest per bond. */
+  cleanPriceBps?: number;
+  accruedPerUnit?: number;
   ok: boolean;
 }
 
@@ -163,3 +166,14 @@ export function issuerDebt(bond: BondView) {
 }
 
 export const totalClaimed = (bond: BondView) => bond.events.reduce((s, e) => s + e.claimed, 0);
+
+/** Mirrors Bond::accrued_per_unit: accrued interest and outstanding face per bond at `now`. */
+export function accruedPerUnit(bond: BondView, now: number): { accrued: number; face: number } | null {
+  const coupons = bond.events.filter((e) => e.kind === KIND.COUPON);
+  const next = coupons.find((e) => e.payTs > now);
+  if (!next) return null;
+  const prevPay = Math.max(bond.startTs, ...coupons.filter((e) => e.payTs <= now).map((e) => e.payTs));
+  const face = Math.floor((bond.faceValue * next.factorBpsApplied) / 10_000);
+  if (now >= next.recordTs || now <= prevPay) return { accrued: 0, face };
+  return { accrued: Math.floor((next.amountPerUnit * (now - prevPay)) / (next.payTs - prevPay)), face };
+}

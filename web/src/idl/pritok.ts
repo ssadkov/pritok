@@ -1417,6 +1417,163 @@ export type Pritok = {
       ]
     },
     {
+      "name": "tradeDvp",
+      "discriminator": [
+        30,
+        145,
+        134,
+        229,
+        248,
+        21,
+        170,
+        83
+      ],
+      "accounts": [
+        {
+          "name": "seller",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "buyer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "bond"
+        },
+        {
+          "name": "sellerHolder",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  104,
+                  111,
+                  108,
+                  100,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "bond"
+              },
+              {
+                "kind": "account",
+                "path": "seller"
+              }
+            ]
+          }
+        },
+        {
+          "name": "buyerHolder",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  104,
+                  111,
+                  108,
+                  100,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "bond"
+              },
+              {
+                "kind": "account",
+                "path": "buyer"
+              }
+            ]
+          }
+        },
+        {
+          "name": "bondMint",
+          "relations": [
+            "bond"
+          ]
+        },
+        {
+          "name": "sellerBondAta",
+          "writable": true
+        },
+        {
+          "name": "buyerBondAta",
+          "writable": true
+        },
+        {
+          "name": "paymentMint",
+          "relations": [
+            "bond"
+          ]
+        },
+        {
+          "name": "buyerPayment",
+          "writable": true
+        },
+        {
+          "name": "sellerPayment",
+          "writable": true
+        },
+        {
+          "name": "bondTokenProgram",
+          "address": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
+        },
+        {
+          "name": "paymentTokenProgram"
+        },
+        {
+          "name": "associatedTokenProgram",
+          "address": "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "units",
+          "type": "u64"
+        },
+        {
+          "name": "cleanPriceBps",
+          "type": "u16"
+        },
+        {
+          "name": "maxTotal",
+          "type": "u64"
+        }
+      ]
+    },
+    {
       "name": "transferBond",
       "discriminator": [
         0,
@@ -1601,6 +1758,21 @@ export type Pritok = {
       ]
     }
   ],
+  "events": [
+    {
+      "name": "tradeSettled",
+      "discriminator": [
+        22,
+        119,
+        166,
+        225,
+        175,
+        53,
+        93,
+        216
+      ]
+    }
+  ],
   "errors": [
     {
       "code": 6000,
@@ -1751,6 +1923,16 @@ export type Pritok = {
       "code": 6029,
       "name": "emptyBankRef",
       "msg": "Bank payment reference is empty"
+    },
+    {
+      "code": 6030,
+      "name": "invalidPrice",
+      "msg": "Price must be positive"
+    },
+    {
+      "code": 6031,
+      "name": "priceAboveLimit",
+      "msg": "Total price exceeds the buyer's limit"
     }
   ],
   "types": [
@@ -2090,6 +2272,49 @@ export type Pritok = {
           {
             "name": "bump",
             "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "tradeSettled",
+      "docs": [
+        "Settlement record in the transaction log: price, accrued interest and total."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "bond",
+            "type": "pubkey"
+          },
+          {
+            "name": "seller",
+            "type": "pubkey"
+          },
+          {
+            "name": "buyer",
+            "type": "pubkey"
+          },
+          {
+            "name": "units",
+            "type": "u64"
+          },
+          {
+            "name": "cleanPriceBps",
+            "type": "u16"
+          },
+          {
+            "name": "cleanPerUnit",
+            "type": "u64"
+          },
+          {
+            "name": "accruedPerUnit",
+            "type": "u64"
+          },
+          {
+            "name": "total",
+            "type": "u64"
           }
         ]
       }

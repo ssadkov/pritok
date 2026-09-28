@@ -288,6 +288,32 @@ export class BondClient {
       .rpc();
   }
 
+  /** DvP sale: both sign; the program adds accrued interest and enforces `maxTotal`. */
+  async trade(seller: Keypair, buyer: Keypair, units: number, cleanPriceBps: number, maxTotal: bigint) {
+    return this.program.methods
+      .tradeDvp(new BN(units), cleanPriceBps, new BN(maxTotal.toString()))
+      .accountsPartial({
+        seller: seller.publicKey,
+        buyer: buyer.publicKey,
+        config: configPda(),
+        bond: this.bond,
+        sellerHolder: holderPda(this.bond, seller.publicKey),
+        buyerHolder: holderPda(this.bond, buyer.publicKey),
+        bondMint: this.bondMint,
+        sellerBondAta: bondAta(seller.publicKey, this.bondMint),
+        buyerBondAta: bondAta(buyer.publicKey, this.bondMint),
+        paymentMint: this.paymentMint,
+        buyerPayment: payAta(buyer.publicKey, this.paymentMint),
+        sellerPayment: payAta(seller.publicKey, this.paymentMint),
+        bondTokenProgram: TOKEN_2022_PROGRAM_ID,
+        paymentTokenProgram: TOKEN_PROGRAM_ID,
+        associatedTokenProgram: ASSOCIATED_TOKEN_PROGRAM_ID,
+        systemProgram: SystemProgram.programId,
+      })
+      .signers([seller, buyer])
+      .rpc();
+  }
+
   fetchBond() {
     return this.program.account.bond.fetch(this.bond);
   }
