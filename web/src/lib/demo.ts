@@ -20,3 +20,10 @@ export const label = (addr: string) => LABELS[addr] ?? `${addr.slice(0, 4)}…${
 const COLORS = ["#028a29", "#45464f", "#1e212b", "#3cbd0d", "#6b6d76"];
 export const colorFor = (addr: string) =>
   COLORS[[...addr].reduce((s, c) => s + c.charCodeAt(0), 0) % COLORS.length];
+
+/** Demo investors (keys in client/.keys; the same keys sign on the hosted demo). */
+export const DEMO_INVESTORS = [
+  { key: "aigerim", address: "2Yk6W29NqwrH67ZeP1CRpuA2ZXVWNXTzmPBVsnikr2yq" },
+  { key: "bolat", address: "DXspRf1H6TF1QNsWKDHfLpmT66rZZmok8eLgJF46pbpi" },
+  { key: "fund", address: "4azBzg3HAXb5cZTB8FQvbLuEuCFcrfgbEWtTjW4VqhXh" },
+] as const;

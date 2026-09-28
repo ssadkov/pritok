@@ -65,6 +65,9 @@ export function BondsScreen({ demo }: { demo: boolean }) {
             <a className="seg-link" href="/">
               Текущий выпуск
             </a>
+            <a className="seg-link" href="/portfolio">
+              Портфель
+            </a>
           </nav>
           <div className="spacer" />
           {demo && <NewBondButton className="btn ghost small-btn" />}

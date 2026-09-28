@@ -237,6 +237,9 @@ function TopBar({
         <a className="seg-link" href="/bonds" data-tour="bonds">
           Все выпуски
         </a>
+        <a className="seg-link" href="/portfolio">
+          Портфель
+        </a>
         <div className="spacer" />
         <span className={`live${stale ? " stale" : ""}`} title={stale ? "Нет связи с devnet — показаны последние данные" : "Данные из devnet, обновление каждые 10 с"}>
           <i />

@@ -79,7 +79,8 @@ function decodeOp(sig: string, tx: ParsedTransactionWithMeta | null): OpView | n
 const HISTORY_CONCURRENCY = 2;
 const knownSigs = new Map<string, string[]>();
 
-async function history(bond: PublicKey): Promise<OpView[]> {
+/** Decoded pritok operations that touched `bond` (any account address works). */
+export async function history(bond: PublicKey): Promise<OpView[]> {
   const key = bond.toBase58();
   try {
     const sigs = await connection.getSignaturesForAddress(bond, { limit: 200 });
@@ -274,4 +275,111 @@ export function listBonds(): Promise<{ now: number; bonds: BondSummary[] }> {
   listCache = { at: Date.now(), data };
   data.catch(() => (listCache = null));
   return data;
+}
+
+// ------------------------------------------------------------------ investor portfolio
+
+export interface PositionView {
+  bond: string;
+  holder: string;
+  issuer: string;
+  couponBps: number;
+  faceValue: number;
+  startTs: number;
+  periodSecs: number;
+  subscriptionEndTs: number;
+  subscriptionClosed: boolean;
+  issuedUnits: number;
+  supply: number;
+  allowed: boolean;
+  balance: number;
+  events: EventView[];
+  /** Units at each event's record date; null until it has passed. */
+  unitsAt: (number | null)[];
+}
+
+export interface PortfolioView {
+  cluster: string;
+  owner: string;
+  now: number;
+  positions: PositionView[];
+  claims: (ClaimView & { bond: string })[];
+  ops: (OpView & { bond: string })[];
+}
+
+/** Everything one investor holds and has done, across every bond of the program. */
+export async function loadPortfolio(owner: string): Promise<PortfolioView> {
+  const ownerKey = new PublicKey(owner);
+  const [holders, claims, now] = await Promise.all([
+    program.account.holder.all([{ memcmp: { offset: 40, bytes: ownerKey.toBase58() } }]),
+    program.account.claim.all([{ memcmp: { offset: 40, bytes: ownerKey.toBase58() } }]),
+    chainTime(),
+  ]);
+  const bondKeys = holders.map((h) => h.account.bond);
+  const bonds = await program.account.bond.fetchMultiple(bondKeys);
+
+  const positions: PositionView[] = [];
+  holders.forEach(({ publicKey, account: h }, i) => {
+    const b = bonds[i];
+    if (!b) return;
+    const issuedUnits = b.subscriptionClosed || now < num(b.subscriptionEndTs) ? num(b.issuedUnits) : num(b.supply);
+    const events: EventView[] = b.events.slice(0, b.eventsLen).map((e, pos) => ({
+      pos,
+      actionId: e.actionId,
+      kind: e.kind,
+      recordTs: num(e.recordTs),
+      payTs: num(e.payTs),
+      factorBpsApplied: e.factorBpsApplied,
+      amountPerUnit: num(e.amountPerUnit),
+      required: num(e.amountPerUnit) * issuedUnits,
+      funded: num(e.funded),
+      claimed: num(e.claimed),
+      mode: e.mode,
+      status: e.status,
+    }));
+    positions.push({
+      bond: h.bond.toBase58(),
+      holder: publicKey.toBase58(),
+      issuer: b.issuer.toBase58(),
+      couponBps: b.couponBps,
+      faceValue: num(b.faceValue),
+      startTs: num(b.startTs),
+      periodSecs: num(b.periodSecs),
+      subscriptionEndTs: num(b.subscriptionEndTs),
+      subscriptionClosed: b.subscriptionClosed,
+      issuedUnits,
+      supply: num(b.supply),
+      allowed: h.allowed,
+      balance: num(h.balance),
+      events,
+      unitsAt: events.map((e) =>
+        e.recordTs > now ? null : e.pos < h.syncedUpto ? num(h.balAt[e.pos]) : num(h.balance),
+      ),
+    });
+  });
+  positions.sort((x, y) => y.startTs - x.startTs);
+
+  // The holder PDA appears in every subscription, transfer, trade, claim and redemption.
+  const histories = await Promise.all(
+    positions.map(async (p) => (await history(new PublicKey(p.holder))).map((o) => ({ ...o, bond: p.bond }))),
+  );
+  const ops = histories.flat().sort((x, y) => y.time - x.time);
+
+  return {
+    cluster: CLUSTER,
+    owner,
+    now,
+    positions,
+    claims: claims.map(({ publicKey, account: c }) => ({
+      bond: c.bond.toBase58(),
+      address: publicKey.toBase58(),
+      owner: c.owner.toBase58(),
+      actionId: c.actionId,
+      units: num(c.units),
+      amount: num(c.amount),
+      status: c.status,
+      bankRefHash: c.bankRefHash.some((x) => x !== 0) ? Buffer.from(c.bankRefHash).toString("hex") : null,
+    })),
+    ops,
+  };
 }

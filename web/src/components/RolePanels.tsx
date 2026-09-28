@@ -224,7 +224,12 @@ export function InvestorPanel({ bond, a, who, setWho }: { bond: BondView; a: Act
   return (
     <section className="card role-panel">
       <div className="card-h">
-        <h2>Кабинет инвестора</h2>
+        <h2>
+          Кабинет инвестора{" "}
+          <a className="seg-link" href={`/portfolio/${me.address}`} style={{ fontSize: 13 }}>
+            Мой портфель →
+          </a>
+        </h2>
         <div className="seg" role="group" aria-label="Инвестор">
           {investors.map((i) => (
             <button key={i.key} aria-pressed={i.key === me.key} onClick={() => setWho(i.key)}>
