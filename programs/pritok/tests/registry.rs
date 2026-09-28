@@ -436,6 +436,34 @@ impl Env {
         read(&self.svm, &self.claim_pda(action_id, owner))
     }
 
+
+    fn trade(&mut self, seller: &Keypair, buyer: &Keypair, units: u64, clean_price_bps: u16, max_total: u64) -> Result<(), String> {
+        let ix = Instruction {
+            program_id: pritok::ID,
+            accounts: pritok::accounts::TradeDvp {
+                seller: seller.pubkey(),
+                buyer: buyer.pubkey(),
+                config: self.config,
+                bond: self.bond,
+                seller_holder: holder_pda(&self.bond, &seller.pubkey()),
+                buyer_holder: holder_pda(&self.bond, &buyer.pubkey()),
+                bond_mint: self.bond_mint,
+                seller_bond_ata: bond_ata(&seller.pubkey(), &self.bond_mint),
+                buyer_bond_ata: bond_ata(&buyer.pubkey(), &self.bond_mint),
+                payment_mint: self.tkzt,
+                buyer_payment: tkzt_ata(&buyer.pubkey(), &self.tkzt),
+                seller_payment: tkzt_ata(&seller.pubkey(), &self.tkzt),
+                bond_token_program: spl_token_2022::ID,
+                payment_token_program: spl_token::ID,
+                associated_token_program: anchor_spl::associated_token::ID,
+                system_program: anchor_lang::system_program::ID,
+            }
+            .to_account_metas(None),
+            data: pritok::instruction::TradeDvp { units, clean_price_bps, max_total }.data(),
+        };
+        send(&mut self.svm, &[ix], seller, &[buyer])
+    }
+
     fn tkzt_balance(&self, owner: &Pubkey) -> u64 {
         let acc = self.svm.get_account(&tkzt_ata(owner, &self.tkzt)).unwrap();
         spl_token::state::Account::unpack(&acc.data).unwrap().amount
@@ -837,4 +865,43 @@ fn revoke_and_pause_keep_existing_rights() {
     env.allow(&b.pubkey());
     env.transfer(&a, &b.pubkey(), 1).unwrap();
     env.assert_reserve();
+}
+
+/// DvP: clean price agreed by the parties + accrued interest computed by the program,
+/// delivered atomically; ex-coupon after the record date; buyer's limit and pause respected.
+#[test]
+fn dvp_trade_with_accrued_interest() {
+    let mut env = setup();
+    let (a, b, _f) = env.placed();
+
+    // Half-way through the first coupon period: accrued = half a coupon = 4 000.00.
+    let mid = T0 + PERIOD / 2;
+    warp(&mut env.svm, mid);
+    let per_unit = FACE * 9_900 / 10_000 + COUPON / 2; // 99 000 + 4 000
+    let total = per_unit * 10;
+    assert!(env.trade(&a, &b, 10, 9_900, total - 1).unwrap_err().contains("PriceAboveLimit"));
+    let (a0, b0) = (env.tkzt_balance(&a.pubkey()), env.tkzt_balance(&b.pubkey()));
+    env.trade(&a, &b, 10, 9_900, total).unwrap();
+    assert_eq!(env.tkzt_balance(&a.pubkey()) - a0, total, "seller received clean price + accrued");
+    assert_eq!(b0 - env.tkzt_balance(&b.pubkey()), total);
+    assert_eq!(env.token_balance(&a.pubkey()), 290);
+    assert_eq!(env.token_balance(&b.pubkey()), 210);
+
+    // After the record date the coupon stays with the seller: no accrued interest is charged.
+    let r1 = record_ts(&env, 0);
+    warp(&mut env.svm, r1 + 1);
+    let (a1, b1) = (env.tkzt_balance(&a.pubkey()), env.tkzt_balance(&b.pubkey()));
+    env.trade(&b, &a, 10, 10_000, FACE * 10).unwrap();
+    assert_eq!(env.tkzt_balance(&b.pubkey()) - b1, FACE * 10, "ex-coupon: clean price only");
+    assert_eq!(a1 - env.tkzt_balance(&a.pubkey()), FACE * 10);
+    assert_eq!(env.units_at(&b.pubkey(), 0, r1 + 1), Some(210), "coupon 1 stays with the seller");
+
+    let op = env.operator.insecure_clone();
+    env.set_paused(&op, true).unwrap();
+    assert!(env.trade(&a, &b, 1, 10_000, FACE * 2).unwrap_err().contains("Paused"));
+    env.set_paused(&op, false).unwrap();
+
+    let stranger = env.investor(1_000 * FACE);
+    env.revoke(&stranger.pubkey()).unwrap();
+    assert!(env.trade(&a, &stranger, 1, 10_000, FACE * 2).unwrap_err().contains("HolderNotAllowed"));
 }

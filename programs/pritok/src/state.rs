@@ -183,6 +183,23 @@ impl Bond {
         pos
     }
 
+    /// Accrued interest and outstanding face value per bond at `now`, for a secondary trade.
+    /// Accrual runs from the previous coupon date (or the start) to the next coupon date on the
+    /// face outstanding in that period. Between a coupon's record date and its payment date the
+    /// coupon stays with the seller, so nothing is accrued ("ex-coupon").
+    /// `None` once no coupon is ahead.
+    pub fn accrued_per_unit(&self, now: i64) -> Option<(u64, u64)> {
+        let coupons = || self.events().iter().filter(|e| e.kind == kind::COUPON);
+        let next = coupons().find(|e| e.pay_ts > now)?;
+        let prev_pay = coupons().filter(|e| e.pay_ts <= now).map(|e| e.pay_ts).max().unwrap_or(self.start_ts);
+        let face = self.principal_per_unit(next.factor_bps_applied);
+        if now >= next.record_ts || now <= prev_pay {
+            return Some((0, face));
+        }
+        let accrued = next.amount_per_unit as u128 * (now - prev_pay) as u128 / (next.pay_ts - prev_pay) as u128;
+        Some((accrued as u64, face))
+    }
+
     pub fn coupon_per_unit(&self, factor_bps: u16) -> u64 {
         (self.face_value as u128 * factor_bps as u128 * self.coupon_bps as u128
             / (BPS * BPS * COUPONS_PER_YEAR)) as u64
@@ -398,6 +415,25 @@ mod tests {
         assert_eq!(h.units_at(&b, 2, r2 + 1), Some(250), "partial redemption, same record date");
         assert_eq!(h.units_at(&b, 3, r2 + 1), None);
         assert_eq!(h.units_at(&b, 3, b.events[3].record_ts), Some(200));
+    }
+
+    /// Accrued interest: half a period accrues half a coupon; ex-coupon after the record date.
+    #[test]
+    fn accrued_interest() {
+        let mut b = bond();
+        let c1 = b.events[0];
+        let mid = b.start_ts + b.period_secs / 2;
+        assert_eq!(b.accrued_per_unit(mid), Some((400_000, 10_000_000)));
+        assert_eq!(b.accrued_per_unit(c1.record_ts), Some((0, 10_000_000)), "ex-coupon");
+        // After coupon 1 is paid, accrual restarts from its payment date.
+        let mid2 = c1.pay_ts + b.period_secs / 4;
+        assert_eq!(b.accrued_per_unit(mid2), Some((200_000, 10_000_000)));
+        // Amortization on coupon 2's date: period 3 accrues on the reduced face.
+        b.insert_partial_redemption(1, 2_000);
+        let c2_pay = b.events[1].pay_ts;
+        let mid3 = c2_pay + b.period_secs / 2;
+        assert_eq!(b.accrued_per_unit(mid3), Some((320_000, 8_000_000)));
+        assert_eq!(b.accrued_per_unit(b.events[b.events_len as usize - 1].pay_ts), None);
     }
 
     /// Test 2 (logic level): several record dates pass silently, then many transfers.

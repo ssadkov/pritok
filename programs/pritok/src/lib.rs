@@ -76,4 +76,8 @@ pub mod pritok {
     pub fn confirm_bank_payment(ctx: Context<ConfirmBankPayment>, action_id: u8, bank_ref_hash: [u8; 32]) -> Result<()> {
         instructions::bank::confirm_bank_payment_handler(ctx, action_id, bank_ref_hash)
     }
+
+    pub fn trade_dvp(ctx: Context<TradeDvp>, units: u64, clean_price_bps: u16, max_total: u64) -> Result<()> {
+        instructions::trade::trade_dvp_handler(ctx, units, clean_price_bps, max_total)
+    }
 }

@@ -62,4 +62,8 @@ pub enum PritokError {
     NotBankRequest,
     #[msg("Bank payment reference is empty")]
     EmptyBankRef,
+    #[msg("Price must be positive")]
+    InvalidPrice,
+    #[msg("Total price exceeds the buyer's limit")]
+    PriceAboveLimit,
 }

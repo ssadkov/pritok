@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
 use anchor_spl::associated_token::AssociatedToken;
-use anchor_spl::token_2022::{self, Token2022};
+use anchor_spl::token_2022::Token2022;
 
 use crate::errors::PritokError;
 use crate::state::*;
@@ -72,23 +72,16 @@ pub fn transfer_bond_handler(ctx: Context<TransferBond>, units: u64) -> Result<(
     let bond_id = bond.bond_id.to_le_bytes();
     let seeds: &[&[u8]] = &[b"bond", bond.issuer.as_ref(), &bond_id, &[bond.bump]];
     let signer = &[seeds];
-    token_ops::thaw(&token_program, &from_ata, &mint, &bond_info, signer)?;
-    token_ops::thaw(&token_program, &to_ata, &mint, &bond_info, signer)?;
-    token_2022::transfer_checked(
-        CpiContext::new(
-            token_program.clone(),
-            token_2022::TransferChecked {
-                from: from_ata.clone(),
-                mint: mint.clone(),
-                to: to_ata.clone(),
-                authority: ctx.accounts.from.to_account_info(),
-            },
-        ),
+    token_ops::move_frozen(
+        &token_program,
+        &mint,
+        &from_ata,
+        &to_ata,
+        &ctx.accounts.from.to_account_info(),
+        &bond_info,
+        signer,
         units,
-        0,
     )?;
-    token_ops::freeze(&token_program, &from_ata, &mint, &bond_info, signer)?;
-    token_ops::freeze(&token_program, &to_ata, &mint, &bond_info, signer)?;
 
     let from_holder = &mut ctx.accounts.from_holder;
     from_holder.sync(bond, now);

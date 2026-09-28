@@ -85,3 +85,35 @@ pub fn freeze<'info>(
         signer_seeds,
     ))
 }
+
+/// Moves bonds between two frozen canonical accounts: thaw both, transfer, freeze both.
+/// `owner` is the sender's wallet and must have signed the outer instruction.
+#[allow(clippy::too_many_arguments)]
+pub fn move_frozen<'info>(
+    token_program: &AccountInfo<'info>,
+    mint: &AccountInfo<'info>,
+    from_ata: &AccountInfo<'info>,
+    to_ata: &AccountInfo<'info>,
+    owner: &AccountInfo<'info>,
+    bond: &AccountInfo<'info>,
+    signer_seeds: &[&[&[u8]]],
+    units: u64,
+) -> Result<()> {
+    thaw(token_program, from_ata, mint, bond, signer_seeds)?;
+    thaw(token_program, to_ata, mint, bond, signer_seeds)?;
+    token_2022::transfer_checked(
+        CpiContext::new(
+            token_program.clone(),
+            token_2022::TransferChecked {
+                from: from_ata.clone(),
+                mint: mint.clone(),
+                to: to_ata.clone(),
+                authority: owner.clone(),
+            },
+        ),
+        units,
+        0,
+    )?;
+    freeze(token_program, from_ata, mint, bond, signer_seeds)?;
+    freeze(token_program, to_ata, mint, bond, signer_seeds)
+}
