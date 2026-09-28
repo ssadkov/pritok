@@ -5,7 +5,7 @@ import { nextStep } from "@/lib/next-step";
 import { NewBondButton } from "./NewBondButton";
 import { Term, startTour, useFirstVisitTour } from "./Tour";
 import { InvestorPanel, IssuerPanel, OperatorPanel, Toast, useAct, type Role } from "./RolePanels";
-import { DEFAULT_BOND, ISSUER_NAME, colorFor, label } from "@/lib/demo";
+import { ISSUER_NAME, colorFor, label } from "@/lib/demo";
 import {
   CLAIM,
   KIND,
@@ -230,10 +230,40 @@ function TopBar({
   return (
     <header className="top">
       <div className="wrap">
-        <a className="brand" href={`/bond/${DEFAULT_BOND}`} style={{ textDecoration: "none" }}>
+        <a className="brand" href="/" style={{ textDecoration: "none" }}>
           <span className="brand-mark" />
           PRITOK<small>реестр и выплаты</small>
         </a>
+        <a className="seg-link" href="/bonds" data-tour="bonds">
+          Все выпуски
+        </a>
+        <div className="spacer" />
+        <span className={`live${stale ? " stale" : ""}`} title={stale ? "Нет связи с devnet — показаны последние данные" : "Данные из devnet, обновление каждые 10 с"}>
+          <i />
+          devnet
+        </span>
+        {bond && (
+          <div className="clock" title={`Время в демо ускорено: 1 полугодие = ${bond.periodSecs} секунд`}>
+            <span className="dot" />
+            {next ? (
+              <>
+                {next.text} <b>{mmss(next.ts - now)}</b>
+              </>
+            ) : (
+              "все даты прошли"
+            )}
+          </div>
+        )}
+        {demo && <NewBondButton className="btn ghost small-btn" />}
+        <button className="btn ghost small-btn tour-btn" onClick={startTour} title="Короткий тур по экрану">
+          <span className="tour-long">Как это работает</span>
+          <span className="tour-short">?</span>
+        </button>
+        <div className="lang">
+          KZ · EN · <b>RU</b>
+        </div>
+      </div>
+      <div className="wrap rolebar">
         <div className="role" data-tour="roles">
           <span className="seg-label">Смотреть как</span>
           <div className="seg" role="group" aria-label="Роль">
@@ -250,35 +280,7 @@ function TopBar({
             ))}
           </div>
         </div>
-        <div className="spacer" />
-        <a className="seg-link" href="/bonds" data-tour="bonds">
-          Все выпуски
-        </a>
-        {demo && <NewBondButton className="btn ghost small-btn" />}
-        <span className={`live${stale ? " stale" : ""}`} title={stale ? "Нет связи с devnet — показаны последние данные" : "Данные из devnet, обновление каждые 10 с"}>
-          <i />
-          devnet
-        </span>
-        {bond && (
-          <div className="clock" title={`Время в демо ускорено: 1 полугодие = ${bond.periodSecs} секунд`}>
-            <span className="dot" />
-            <span className="clock-long">Ускоренное время · 1 полугодие = {bond.periodSecs} с ·</span>
-            {next ? (
-              <>
-                {next.text} <b>{mmss(next.ts - now)}</b>
-              </>
-            ) : (
-              "все даты прошли"
-            )}
-          </div>
-        )}
-        <button className="btn ghost small-btn tour-btn" onClick={startTour} title="Короткий тур по экрану">
-          <span className="tour-long">Как это работает</span>
-          <span className="tour-short">?</span>
-        </button>
-        <div className="lang">
-          KZ · EN · <b>RU</b>
-        </div>
+        {bond && <span className="rolebar-note">Ускоренное время: 1 полугодие = {bond.periodSecs} с</span>}
       </div>
     </header>
   );

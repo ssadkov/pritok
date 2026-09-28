@@ -156,9 +156,6 @@
 
   footer { color: var(--muted); font-size: 12px; padding: 0 0 32px; display: flex; gap: 16px; flex-wrap: wrap; justify-content: space-between; }
 
-  @media (max-width: 1360px) {
-    .clock-long { display: none; }
-  }
   @media (max-width: 1180px) {
     .brand small { display: none; }
     .grid2 { grid-template-columns: minmax(0, 1fr); }
@@ -257,14 +254,6 @@
   .driver-popover.pritok-tour .driver-popover-next-btn { background: var(--green); color: #fff; text-shadow: none; border: 0; border-radius: 8px; padding: 6px 12px; font-weight: 700; }
   .driver-popover.pritok-tour .driver-popover-prev-btn { border-radius: 8px; padding: 6px 12px; font-weight: 600; text-shadow: none; }
   .tour-short { display: none; }
-  @media (max-width: 1480px) {
-    .clock-long, .brand small { display: none; }
-  }
-  @media (max-width: 1320px) {
-    .seg-label, .tour-long { display: none; }
-    .tour-short { display: inline; }
-    .top .wrap { gap: 10px; }
-  }
   .deal { background: var(--bg); border-radius: 8px; padding: 10px 12px; margin: 4px 0 10px; display: grid; gap: 3px; font-size: 13px; }
   .deal-total { border-top: 1px solid var(--line-strong); margin-top: 4px; padding-top: 6px; }
   .calendar { display: grid; margin-bottom: 8px; }
@@ -272,3 +261,14 @@
   .cal-row .when { font-family: var(--mono); font-size: 12px; color: var(--muted); }
   .cal-row.total { border-bottom: 0; color: var(--muted); }
   .cal-row.total b { color: var(--green); }
+  /* Header: second row with the role switcher */
+  .top .wrap.rolebar { height: auto; padding-bottom: 10px; gap: 12px; justify-content: space-between; }
+  .rolebar-note { font-size: 12px; color: var(--muted); white-space: nowrap; }
+  .top .wrap > .spacer { flex: 1; }
+  @media (max-width: 1100px) {
+    .brand small, .tour-long { display: none; }
+    .tour-short { display: inline; }
+  }
+  @media (max-width: 720px) {
+    .rolebar-note { display: none; }
+  }
