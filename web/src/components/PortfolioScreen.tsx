@@ -407,6 +407,8 @@ function describeOp(pf: PortfolioView, op: PortfolioView["ops"][number], t: T) {
         : t("Получено {n} обл. от {from} · {name}", { n, from: nameOf(op.actor ?? "", t), name });
     case "claim":
       return t("Выплата{event} на кошелёк · {name}", { event, name });
+    case "pay_holder":
+      return t("Выплата{event} от оператора на кошелёк · {name}", { event, name });
     case "claim_to_bank":
       return t("Выплата{event} через банк · {name}", { event, name });
     case "confirm_bank_payment":

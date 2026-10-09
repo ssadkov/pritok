@@ -29,7 +29,7 @@ export function nextStep(bond: BondView, now: number, t: T = ruT): NextStep {
     return {
       tone: "alert",
       text: t("Регистратор приостановил подписку и переводы. Уже возникшие выплаты при этом работают."),
-      go: { role: "operator", label: t("Кабинет регистратора") },
+      go: { role: "operator", label: t("Консоль оператора") },
     };
   }
   if (!bond.subscriptionClosed && now < bond.subscriptionEndTs) {
@@ -71,21 +71,23 @@ export function nextStep(bond: BondView, now: number, t: T = ruT): NextStep {
           : t("{n} выплаты ждут банковского перевода: деньги уже у платёжного агента, осталось подтвердить платёжку.", {
               n: bankQueue.length,
             }),
-      go: { role: "operator", label: t("Подтвердить как платёжный агент") },
+      go: { role: "operator", label: t("Подтвердить как оператор") },
     };
   }
 
-  // Money is in the vault and the date has come: holders can take it.
+  // Money is in the vault and the date has come: the operator executes the payout for everyone.
   for (const e of bond.events) {
     if (e.kind === KIND.MATURITY || e.status !== STATUS.FUNDED || now < e.payTs) continue;
-    const waiting = bond.holders.find(
+    const waiting = bond.holders.filter(
       (h) => (h.unitsAt[e.pos] ?? 0) > 0 && !bond.claims.some((c) => c.owner === h.owner && c.actionId === e.actionId),
     );
-    if (waiting) {
+    if (waiting.length) {
       return {
         tone: "action",
-        text: t("Выплату по {event} можно получить — на кошелёк или через банк.", { event: title(e) }),
-        go: { role: "investor", who: investorKey(bond, waiting.owner), label: t("Получить как инвестор") },
+        text: t("Выплата по {event} готова к исполнению: оператор проводит её всем держателям одной командой. Держатель может и сам получить её раньше — на кошелёк или через банк.", {
+          event: title(e),
+        }),
+        go: { role: "operator", label: t("Исполнить как оператор") },
       };
     }
   }

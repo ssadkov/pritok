@@ -7,7 +7,7 @@ export const LABELS: Record<string, string> = {
   DXspRf1H6TF1QNsWKDHfLpmT66rZZmok8eLgJF46pbpi: "Болат Н.",
   "4azBzg3HAXb5cZTB8FQvbLuEuCFcrfgbEWtTjW4VqhXh": "Фонд «Жібек»",
   H4qMo3WbqVE9oREDMAHEYypVMamCzUjcwy6fb5zuRir: "ТОО «СтепьЛогистик»",
-  DiFbdAWGJX85yZFbwAE44MfJdi53AVGvG7Y5hdDMZ3ad: "Регистратор",
+  DiFbdAWGJX85yZFbwAE44MfJdi53AVGvG7Y5hdDMZ3ad: "Оператор платформы",
 };
 
 export const ISSUER_NAME: Record<string, string> = {

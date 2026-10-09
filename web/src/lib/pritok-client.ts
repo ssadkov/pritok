@@ -5,9 +5,10 @@ import {
   ASSOCIATED_TOKEN_PROGRAM_ID,
   TOKEN_2022_PROGRAM_ID,
   TOKEN_PROGRAM_ID,
+  createAssociatedTokenAccountIdempotentInstruction,
   getAssociatedTokenAddressSync,
 } from "@solana/spl-token";
-import { Keypair, PublicKey, SystemProgram } from "@solana/web3.js";
+import { Keypair, PublicKey, SystemProgram, Transaction } from "@solana/web3.js";
 import idl from "@/idl/pritok.json";
 import type { Pritok } from "@/idl/pritok";
 
@@ -256,6 +257,38 @@ export class BondClient {
       })
       .signers([authority])
       .rpc();
+  }
+
+  /**
+   * Operator-run execution: pays a coupon or partial redemption to each holder's own
+   * wallet in one transaction (keep `owners` to about four per call). Creates a
+   * holder's payment account first if it is missing.
+   */
+  async payHolders(operator: Keypair, owners: PublicKey[], actionId: number) {
+    const tx = new Transaction();
+    for (const owner of owners) {
+      const ownerPayment = payAta(owner, this.paymentMint);
+      tx.add(
+        createAssociatedTokenAccountIdempotentInstruction(operator.publicKey, ownerPayment, owner, this.paymentMint, TOKEN_PROGRAM_ID),
+        await this.program.methods
+          .payHolder(actionId)
+          .accountsPartial({
+            operator: operator.publicKey,
+            config: configPda(),
+            owner,
+            bond: this.bond,
+            holder: holderPda(this.bond, owner),
+            claim: claimPda(this.bond, actionId, owner),
+            paymentMint: this.paymentMint,
+            vault: this.vault,
+            ownerPayment,
+            paymentTokenProgram: TOKEN_PROGRAM_ID,
+            systemProgram: SystemProgram.programId,
+          })
+          .instruction(),
+      );
+    }
+    return (this.program.provider as AnchorProvider).sendAndConfirm(tx, [operator]);
   }
 
   async confirmBankPayment(operator: Keypair, owner: PublicKey, actionId: number, bankRefHash: number[]) {

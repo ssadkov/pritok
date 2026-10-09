@@ -80,4 +80,8 @@ pub mod pritok {
     pub fn trade_dvp(ctx: Context<TradeDvp>, units: u64, clean_price_bps: u16, max_total: u64) -> Result<()> {
         instructions::trade::trade_dvp_handler(ctx, units, clean_price_bps, max_total)
     }
+
+    pub fn pay_holder(ctx: Context<PayHolder>, action_id: u8) -> Result<()> {
+        instructions::execute::pay_holder_handler(ctx, action_id)
+    }
 }

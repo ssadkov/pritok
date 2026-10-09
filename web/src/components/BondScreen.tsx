@@ -5,6 +5,7 @@ import { nextStep } from "@/lib/next-step";
 import { LangSwitch, useT } from "@/lib/i18n";
 import { ruPlural, type T } from "@/lib/i18n-core";
 import { NewBondButton } from "./NewBondButton";
+import { executionRows } from "./OperatorConsole";
 import { Term, startTour, useFirstVisitTour } from "./Tour";
 import { InvestorPanel, IssuerPanel, OperatorPanel, Toast, useAct, type Role } from "./RolePanels";
 import { colorFor, issuerOf, nameOf } from "@/lib/demo";
@@ -215,8 +216,8 @@ function mmss(sec: number) {
 
 const ROLES: [Role, string][] = [
   ["public", "Публика"],
+  ["operator", "Оператор"],
   ["issuer", "Эмитент"],
-  ["operator", "Регистратор"],
   ["investor", "Инвестор"],
 ];
 
@@ -551,6 +552,7 @@ function CalcPanel({
     <>
       <h3>{eventTitle(bond, e, t)}</h3>
       <div className="sub">{t("фиксация {record} · выплата {pay}", { record: dateTime(e.recordTs), pay: dateTime(e.payTs) })}</div>
+      <LifecycleSteps bond={bond} e={e} />
       <div className="formula">
         {t("Сумма")} = <b>{t("облигаций на дату фиксации")}</b> × <b>{money(e.amountPerUnit)} ₸</b> {t("на облигацию")}
       </div>
@@ -605,6 +607,66 @@ function CalcPanel({
         </button>
       )}
     </>
+  );
+}
+
+/** One corporate action end to end: created, register fixed, funded, executed — each with its proof. */
+function LifecycleSteps({ bond, e }: { bond: BondView; e: EventView }) {
+  const t = useT();
+  const ops = bond.ops;
+  const last = (pred: (o: OpView) => boolean) => [...ops].reverse().find(pred);
+  // A partial redemption is declared against the coupon that shares its record date.
+  const anchor = bond.events.find((x) => x.kind === KIND.COUPON && x.recordTs === e.recordTs);
+  const created =
+    e.kind === KIND.PARTIAL_REDEMPTION
+      ? last((o) => o.name === "declare_partial_redemption" && o.actionId === anchor?.actionId)
+      : ops.find((o) => o.name === "create_bond");
+  const funded = e.kind === KIND.PARTIAL_REDEMPTION ? created : last((o) => o.name === "fund_action" && o.actionId === e.actionId);
+  const paidOp = last((o) => ["claim", "pay_holder", "claim_to_bank", "redeem"].includes(o.name) && (o.actionId === e.actionId || o.name === "redeem"));
+  const rows = executionRows(bond, e);
+  const paid = rows.filter((r) => r.claim).length;
+  const isFunded = e.funded >= e.required && e.required > 0;
+  const overdue = bond.now >= e.payTs && !isFunded;
+  const steps: { done: boolean; alert?: boolean; title: string; note: string; sig?: string }[] = [
+    { done: true, title: t("Создано"), note: e.kind === KIND.PARTIAL_REDEMPTION ? t("объявлено эмитентом") : t("в графике выпуска"), sig: created?.sig },
+    {
+      done: bond.now >= e.recordTs,
+      title: t("Реестр зафиксирован"),
+      note: bond.now >= e.recordTs ? t("балансы на дату записаны программой") : dateTime(e.recordTs),
+    },
+    {
+      done: isFunded,
+      alert: overdue,
+      title: t("Деньги внесены"),
+      note: `${money(e.funded)} / ${money(e.required)} ₸`,
+      sig: funded?.sig,
+    },
+    {
+      done: rows.length > 0 && paid >= rows.length && bond.now >= e.payTs,
+      title: t("Исполнено"),
+      note: t("{paid} из {total} держателей", { paid, total: rows.length }),
+      sig: paid ? paidOp?.sig : undefined,
+    },
+  ];
+  return (
+    <ol className="steps">
+      {steps.map((st, i) => (
+        <li key={i} className={st.alert ? "alert" : st.done ? "done" : ""}>
+          <b>{st.title}</b>
+          <span>
+            {st.note}
+            {st.sig && (
+              <>
+                {" "}
+                <a href={explorerTx(st.sig, bond.cluster)} target="_blank" rel="noopener">
+                  ↗
+                </a>
+              </>
+            )}
+          </span>
+        </li>
+      ))}
+    </ol>
   );
 }
 
@@ -738,6 +800,8 @@ function describe(bond: BondView, op: OpView, t: T) {
       return t("{who} получил выплату по {event}", { who, event });
     case "redeem":
       return t("{who} сдал облигации и получил номинал", { who });
+    case "pay_holder":
+      return t("Оператор исполнил выплату по {event}: {n} держателям на кошельки", { event, n: op.units ?? 1 });
     case "claim_to_bank":
       return t("Выплата по {event} для {to} направлена платёжному агенту для перевода в банк", { event, to });
     case "confirm_bank_payment":

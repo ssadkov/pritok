@@ -49,6 +49,13 @@ function decodeOp(sig: string, tx: ParsedTransactionWithMeta | null): OpView | n
       return { ...base, actionId: n("action_id") };
     case "allow_holder":
       return { ...base, actor: acc[3] };
+    case "pay_holder": {
+      // One operator transaction pays several holders: count the program's instructions.
+      const paid = tx.transaction.message.instructions.filter(
+        (i) => i.programId.equals(program.programId) && "data" in i && coder.decode(i.data, "base58")?.name === "pay_holder",
+      ).length;
+      return { ...base, actor: acc[0], counterparty: acc[2], actionId: n("action_id"), units: paid };
+    }
     case "claim_to_bank":
       return { ...base, actor: acc[0], counterparty: acc[1], actionId: n("action_id") };
     case "confirm_bank_payment":

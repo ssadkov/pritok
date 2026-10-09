@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { nameOf } from "@/lib/demo";
 import { useT } from "@/lib/i18n";
+import { CorporateActions } from "./OperatorConsole";
 import { Term } from "./Tour";
 import {
   CLAIM,
@@ -60,7 +61,7 @@ export function useAct(address: string, onDone: () => void) {
   return { busy, result, act, clear: () => setResult(null) };
 }
 
-type Act = ReturnType<typeof useAct>;
+export type Act = ReturnType<typeof useAct>;
 
 export function Toast({ bond, a }: { bond: BondView; a: Act }) {
   const t = useT();
@@ -83,7 +84,7 @@ export function Toast({ bond, a }: { bond: BondView; a: Act }) {
   );
 }
 
-function Btn({ a, id, children, ...rest }: { a: Act; id: string; children: React.ReactNode } & React.ButtonHTMLAttributes<HTMLButtonElement>) {
+export function Btn({ a, id, children, ...rest }: { a: Act; id: string; children: React.ReactNode } & React.ButtonHTMLAttributes<HTMLButtonElement>) {
   const t = useT();
   return (
     <button className="btn" disabled={!!a.busy || rest.disabled} {...rest}>
@@ -474,8 +475,8 @@ export function OperatorPanel({ bond, a }: { bond: BondView; a: Act }) {
     <section className="card role-panel">
       <div className="card-h">
         <h2>
-          {t("Кабинет регистратора и платёжного агента")}{" "}
-          <Term tip={t("Регистратор ведёт реестр: допускает инвесторов (KYC) и может приостановить операции. Платёжный агент проводит выплаты через банк тем, кто не получает на кошелёк.")} />
+          {t("Консоль оператора платформы")}{" "}
+          <Term tip={t("Оператор ведёт корпоративные действия и реестр: исполняет выплаты держателям, допускает инвесторов (KYC), может приостановить операции и как платёжный агент проводит выплаты через банк тем, кто не получает на кошелёк.")} />
         </h2>
         <div className="btns">
           {bond.paused ? (
@@ -488,6 +489,9 @@ export function OperatorPanel({ bond, a }: { bond: BondView; a: Act }) {
             </Btn>
           )}
         </div>
+      </div>
+      <div className="card-b">
+        <CorporateActions bond={bond} a={a} />
       </div>
       <div className="card-b panel-grid">
         <div>

@@ -432,6 +432,28 @@ impl Env {
         send(&mut self.svm, &[ix], signer, &[])
     }
 
+    fn pay_holder(&mut self, signer: &Keypair, owner: &Pubkey, action_id: u8, to: Pubkey) -> Result<(), String> {
+        let ix = Instruction {
+            program_id: pritok::ID,
+            accounts: pritok::accounts::PayHolder {
+                operator: signer.pubkey(),
+                config: self.config,
+                owner: *owner,
+                bond: self.bond,
+                holder: holder_pda(&self.bond, owner),
+                claim: self.claim_pda(action_id, owner),
+                payment_mint: self.tkzt,
+                vault: self.vault(),
+                owner_payment: to,
+                payment_token_program: spl_token::ID,
+                system_program: anchor_lang::system_program::ID,
+            }
+            .to_account_metas(None),
+            data: pritok::instruction::PayHolder { action_id }.data(),
+        };
+        send(&mut self.svm, &[ix], signer, &[])
+    }
+
     fn receipt(&self, action_id: u8, owner: &Pubkey) -> pritok::state::Claim {
         read(&self.svm, &self.claim_pda(action_id, owner))
     }
@@ -904,4 +926,47 @@ fn dvp_trade_with_accrued_interest() {
     let stranger = env.investor(1_000 * FACE);
     env.revoke(&stranger.pubkey()).unwrap();
     assert!(env.trade(&a, &stranger, 1, 10_000, FACE * 2).unwrap_err().contains("HolderNotAllowed"));
+}
+
+/// The operator executes a coupon for every holder: money only to each holder's own
+/// account, one receipt per holder, no double payment with a wallet claim.
+#[test]
+fn operator_executes_payout_for_all_holders() {
+    use pritok::state::claim_status;
+    let mut env = setup();
+    let (a, b, f) = env.placed();
+    let op = env.operator.insecure_clone();
+    let issuer = env.issuer.insecure_clone();
+    env.fund(C1, COUPON * 1_000).unwrap();
+    let a_ata = tkzt_ata(&a.pubkey(), &env.tkzt);
+
+    let err = env.pay_holder(&op, &a.pubkey(), C1, a_ata).unwrap_err();
+    assert!(err.contains("NotPayable"), "{err}");
+    let t = pay_ts(&env, C1);
+    warp(&mut env.svm, t);
+
+    let err = env.pay_holder(&issuer, &a.pubkey(), C1, a_ata).unwrap_err();
+    assert!(err.contains("NotOperator"), "{err}");
+    let err = env.pay_holder(&op, &a.pubkey(), C1, tkzt_ata(&op.pubkey(), &env.tkzt)).unwrap_err();
+    assert!(err.contains("ConstraintAssociated") || err.contains("ConstraintTokenOwner"), "only the holder's own account: {err}");
+
+    env.revoke(&f.pubkey()).unwrap(); // a revoked holder is still paid
+    env.claim(&b, C1).unwrap(); // one holder already claimed by themselves
+    let before = env.tkzt_balance(&a.pubkey());
+    env.pay_holder(&op, &a.pubkey(), C1, a_ata).unwrap();
+    let f_ata = tkzt_ata(&f.pubkey(), &env.tkzt);
+    env.pay_holder(&op, &f.pubkey(), C1, f_ata).unwrap();
+    assert_eq!(env.tkzt_balance(&a.pubkey()) - before, 300 * COUPON);
+    assert_eq!(env.receipt(C1, &a.pubkey()).status, claim_status::PAID);
+
+    let b_ata = tkzt_ata(&b.pubkey(), &env.tkzt);
+    assert!(env.pay_holder(&op, &b.pubkey(), C1, b_ata).is_err(), "already claimed");
+    assert!(env.pay_holder(&op, &a.pubkey(), C1, a_ata).is_err(), "no double payment");
+    assert!(env.claim(&a, C1).is_err(), "no claim after the operator paid");
+
+    assert_eq!(env.event(C1).claimed, COUPON * 1_000);
+    assert_eq!(env.bond_state().reserved, 0);
+    env.assert_reserve();
+    let err = env.pay_holder(&op, &a.pubkey(), MAT, a_ata).unwrap_err();
+    assert!(err.contains("WrongActionKind"), "{err}");
 }

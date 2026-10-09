@@ -311,3 +311,25 @@
   }
   .pf-claim { border-left-color: var(--green-2); background: var(--green-soft); }
   .red-link { color: var(--red); }
+
+/* operator console: corporate actions */
+.ca h4 { margin: 0 0 8px; font-size: 13px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+.ca-table td, .ca-table th { white-space: nowrap; }
+.ca-table tr[aria-selected="true"] td { background: var(--bg); }
+.ca-actions { text-align: right; }
+.ca-actions .btn { padding: 6px 12px; }
+.ca-report { margin-top: 14px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 12px; }
+.ca-report-h { display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px; margin-bottom: 6px; }
+.ca-report-h .linkbtn { margin-left: auto; }
+
+/* one corporate action end to end */
+.steps { list-style: none; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; margin: 0 0 14px; padding: 0; counter-reset: step; }
+.steps li { position: relative; padding: 8px 8px 8px 10px; border-radius: 10px; background: var(--bg); font-size: 11px; color: var(--muted); counter-increment: step; }
+.steps li b { display: block; font-size: 12px; color: var(--graphite); }
+.steps li b::before { content: counter(step) ". "; }
+.steps li.done { background: var(--green-soft); }
+.steps li.done b { color: var(--green); }
+.steps li.done b::before { content: "✓ "; }
+.steps li.alert { background: var(--red-soft); }
+.steps li.alert b { color: var(--red); }
+.steps a { text-decoration: none; }

@@ -74,7 +74,9 @@ export type Action =
   | { type: "confirmBank"; owner: string; actionId: number; reference: string }
   | { type: "revoke"; owner: string }
   | { type: "pause"; paused: boolean }
-  | { type: "trade"; who: Investor; buyer: Investor; units: number; priceBps: number };
+  | { type: "trade"; who: Investor; buyer: Investor; units: number; priceBps: number }
+  | { type: "execute"; actionId: number }
+  | { type: "bankFor"; owner: string; actionId: number };
 
 export async function perform(bond: BondView, a: Action): Promise<string> {
   const { conn, keys } = ctx();
@@ -122,6 +124,20 @@ export async function perform(bond: BondView, a: Action): Promise<string> {
       return c.revokeHolder(keys.operator, new PublicKey(a.owner));
     case "pause":
       return BondClient.setPaused(program, keys.operator, a.paused);
+    case "execute": {
+      // The operator pays every holder of the record date who has not been paid yet.
+      const e = bond.events.find((x) => x.actionId === a.actionId);
+      if (!e) throw new Error("Неизвестное событие");
+      const owners = bond.holders
+        .filter((h) => (h.unitsAt[e.pos] ?? 0) > 0 && !bond.claims.some((cl) => cl.owner === h.owner && cl.actionId === e.actionId))
+        .map((h) => new PublicKey(h.owner));
+      if (!owners.length) throw new Error("Все держатели уже получили выплату");
+      let sig = "";
+      for (let i = 0; i < owners.length; i += 4) sig = await c.payHolders(keys.operator, owners.slice(i, i + 4), e.actionId);
+      return sig;
+    }
+    case "bankFor":
+      return c.claimToBank(keys.operator, new PublicKey(a.owner), a.actionId, keys.operator.publicKey);
     case "trade": {
       // Both parties are demo wallets here; in production each signs on its own device.
       const q = accruedPerUnit(bond, bond.now);
