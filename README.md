@@ -11,6 +11,7 @@ Built for the Superteam Kazakhstan × KASE side track [*Corporate Actions on Blo
 | **Live demo** | **https://pritok-sol.vercel.app** — Solana devnet, role screens with one-click demo signing |
 | Program | [`9LMSMqD3xMBaNdfRb4bKDT3MBTX8ry1Na84rMSJ787aY`](https://explorer.solana.com/address/9LMSMqD3xMBaNdfRb4bKDT3MBTX8ry1Na84rMSJ787aY?cluster=devnet) on devnet |
 | Full lifecycle on devnet | [`FCNB…C6ry`](https://pritok-sol.vercel.app/bond/FCNBFwobxkZw7k7n5U3KsRjzR1VSTtXiAD13FsvQC6ry) — coupons, 20% amortization, a default and its cure, wallet and bank payouts, redemption with burn |
+| Operator-run lifecycle | [`H9xK…mdja`](https://pritok-sol.vercel.app/bond/H9xKnWEqqxdYC4K7PSQChiZJddQy53dw5Z7sm72omdja) — every coupon and the redemption executed by the operator, bonds burned by the program |
 | Tests | 21 passing: 7 unit, 14 integration on LiteSVM |
 
 ![Public view of a bond executed end to end by the operator](docs/img/registry.png)
