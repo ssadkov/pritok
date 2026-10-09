@@ -116,9 +116,9 @@ export const DICT: Record<string, [string, string]> = {
   "нажмите на строку — покажем расчёт": ["click a row to see the calculation", "есептеуді көру үшін жолды басыңыз"],
   "Событие": ["Event", "Оқиға"],
   "Фиксация": ["Record date", "Тіркеу"],
-  "Дата фиксации реестра: кто владеет облигациями в этот момент, тот и получает выплату. Перевод после этой даты выплату не передаёт.": [
-    "Record date: whoever holds the bonds at this moment receives the payment. A transfer after this date does not move the payment.",
-    "Тізілімді тіркеу күні: осы сәтте облигацияларды кім ұстаса, төлемді сол алады. Осы күннен кейінгі аударым төлемді бермейді.",
+  "Дата фиксации реестра: кто владеет облигациями в этот момент, тот и получает выплату. Перевод после этой даты выплату не передаёт. По закону РК реестр фиксируется на начало последнего дня купонного периода; в демо это окно растянуто до 30 секунд, чтобы успеть показать перевод после фиксации.": [
+    "Record date: whoever holds the bonds at this moment receives the payment. A transfer after this date does not move the payment. Under Kazakh law the register is fixed at the start of the last day of the coupon period; the demo stretches this window to 30 seconds so a transfer after the record date can be shown.",
+    "Тізілімді тіркеу күні: осы сәтте облигацияларды кім ұстаса, төлемді сол алады. Осы күннен кейінгі аударым төлемді бермейді. ҚР заңы бойынша тізілім купондық кезеңнің соңғы күнінің басында тіркеледі; демода тіркеуден кейінгі аударымды көрсету үшін бұл терезе 30 секундқа дейін созылған.",
   ],
   "На облигацию": ["Per bond", "Бір облигацияға"],
   "Внесено": ["Funded", "Енгізілді"],

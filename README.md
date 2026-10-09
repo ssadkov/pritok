@@ -117,6 +117,15 @@ Rules that keep this correct, each covered by a test:
 
 Amounts are rounded down per holder; any dust stays in the vault. The issuer never withdraws from the vault.
 
+### Kazakhstan conventions
+
+| Convention | Kazakhstan practice | PRITOK |
+|---|---|---|
+| Record date | Art. 31(2) of the Law "On the Securities Market": holders are fixed as of the start of the last day of the period the payment is for; older issues may keep a longer window set in their terms | `record_offset_secs` is set per issue: one day for a real issue, longer where the prospectus says so. The demo stretches it to 30 seconds out of a 240-second "half-year", so a transfer after the record date can be shown |
+| Coupon amount | Day-count basis 30/360 is standard on KASE | A semi-annual coupon is `face × rate / 2`, which is what 30/360 gives for a full regular period |
+| Accrued interest | 30/360 | Linear in actual time within the coupon period. Close to 30/360, but not identical around month ends. A 30/360 calendar for real-dated issues is on the roadmap |
+| Rounding | Tiyn | Amounts are held in tiyn (2 decimals) and rounded down per holder |
+
 ## Settlement flows
 
 - **Wallet payout.** After the payment date a holder claims; the vault pays the tKZT and a receipt account is created. A second claim fails because the receipt already exists.
@@ -181,7 +190,7 @@ Revocation and pause never cancel a payout that already exists: a revoked or pau
 - **Admission is per bond.** In a real market an investor passes KYC once. Next step: an investor registry shared across issues.
 - **Bank confirmation is an attestation.** A production integration needs reconciliation with the paying agent's bank statement.
 - **At most 8 events per bond:** 4 coupons, maturity and up to 3 partial redemptions.
-- Next: KZTE or another tenge stablecoin as the payment token, bondholder voting, a yield-to-maturity display.
+- Next: KZTE or another tenge stablecoin as the payment token, coupons per year as an issue parameter (today semi-annual), 30/360 accrued interest on real dates, bondholder voting, a yield-to-maturity display.
 
 ## Build and run
 
