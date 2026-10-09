@@ -77,7 +77,7 @@ export function BondsScreen({ demo }: { demo: boolean }) {
             </a>
           </nav>
           <div className="spacer" />
-          {demo && <NewBondButton className="btn ghost small-btn" />}
+          {demo && <NewBondButton className="btn ghost small-btn" autoOpen />}
           <LangSwitch />
         </div>
       </header>

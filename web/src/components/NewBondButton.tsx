@@ -17,12 +17,25 @@ const DEFAULTS: Terms = { faceValue: 100_000, couponPct: 16, coupons: 4, units: 
  * Opens the issuer's form for a new demo issue: face value, coupon, term and size.
  * The server creates the bond, admits the three demo investors and places it among them.
  */
-export function NewBondButton({ className = "btn", label = "Новый демо-выпуск" }: { className?: string; label?: string }) {
+export function NewBondButton({
+  className = "btn",
+  label = "Новый демо-выпуск",
+  autoOpen = false,
+}: {
+  className?: string;
+  label?: string;
+  /** Opens the form on load when the link carries ?new=1. */
+  autoOpen?: boolean;
+}) {
   const t = useT();
   const [open, setOpen] = useState(false);
   const [terms, setTerms] = useState<Terms>(DEFAULTS);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (autoOpen && new URLSearchParams(window.location.search).has("new")) setOpen(true);
+  }, [autoOpen]);
 
   useEffect(() => {
     if (!open) return;

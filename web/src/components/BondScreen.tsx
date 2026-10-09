@@ -270,7 +270,7 @@ function TopBar({
             )}
           </div>
         )}
-        {demo && <NewBondButton className="btn ghost small-btn" />}
+        {demo && <NewBondButton className="btn ghost small-btn" autoOpen />}
         <button className="btn ghost small-btn tour-btn" onClick={() => startTour(t)} title={t("Короткий тур по экрану")}>
           <span className="tour-long">{t("Как это работает")}</span>
           <span className="tour-short">?</span>
