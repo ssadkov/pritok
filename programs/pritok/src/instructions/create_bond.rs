@@ -11,6 +11,9 @@ use anchor_spl::token_2022::{
 use anchor_spl::token_2022_extensions::default_account_state::{
     default_account_state_initialize, DefaultAccountStateInitialize,
 };
+use anchor_spl::token_2022_extensions::permanent_delegate::{
+    permanent_delegate_initialize, PermanentDelegateInitialize,
+};
 use anchor_spl::associated_token::AssociatedToken;
 use anchor_spl::token_interface::{Mint, TokenAccount, TokenInterface};
 
@@ -124,10 +127,13 @@ pub fn create_bond_handler(ctx: Context<CreateBond>, params: CreateBondParams) -
     bond.mint_bump = ctx.bumps.bond_mint;
     bond.build_schedule();
 
-    // Bond mint: decimals 0, every new token account starts frozen,
-    // mint and freeze authority is the bond PDA.
+    // Bond mint: decimals 0, every new token account starts frozen, mint and
+    // freeze authority is the bond PDA. The bond PDA is also the permanent delegate,
+    // so the program itself can burn bonds at an operator-run redemption; no person
+    // holds that right, and the program burns only against a principal payment.
     let space = ExtensionType::try_calculate_account_len::<SplMint>(&[
         ExtensionType::DefaultAccountState,
+        ExtensionType::PermanentDelegate,
     ])?;
     let mint_seeds: &[&[u8]] = &[b"mint", bond_key.as_ref(), &[ctx.bumps.bond_mint]];
     system_program::create_account(
@@ -152,6 +158,16 @@ pub fn create_bond_handler(ctx: Context<CreateBond>, params: CreateBondParams) -
             },
         ),
         &AccountState::Frozen,
+    )?;
+    permanent_delegate_initialize(
+        CpiContext::new(
+            ctx.accounts.bond_token_program.to_account_info(),
+            PermanentDelegateInitialize {
+                token_program_id: ctx.accounts.bond_token_program.to_account_info(),
+                mint: ctx.accounts.bond_mint.to_account_info(),
+            },
+        ),
+        &bond_key,
     )?;
     token_2022::initialize_mint2(
         CpiContext::new(

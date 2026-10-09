@@ -84,4 +84,8 @@ pub mod pritok {
     pub fn pay_holder(ctx: Context<PayHolder>, action_id: u8) -> Result<()> {
         instructions::execute::pay_holder_handler(ctx, action_id)
     }
+
+    pub fn redeem_for(ctx: Context<RedeemFor>, maturity_action_id: u8, coupon_action_id: u8) -> Result<()> {
+        instructions::execute::redeem_for_handler(ctx, maturity_action_id, coupon_action_id)
+    }
 }

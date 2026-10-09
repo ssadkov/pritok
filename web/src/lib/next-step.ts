@@ -13,12 +13,6 @@ export interface NextStep {
   go?: { role: StepRole; who?: "aigerim" | "bolat" | "fund"; label: string };
 }
 
-const WHO = ["aigerim", "bolat", "fund"] as const;
-
-function investorKey(bond: BondView, owner: string) {
-  return bond.demo?.investors?.find((i) => i.address === owner)?.key ?? WHO[0];
-}
-
 export function nextStep(bond: BondView, now: number, t: T = ruT): NextStep {
   const title = (e: (typeof bond.events)[number]) => `«${eventTitle(bond, e, t)}»`;
 
@@ -94,11 +88,10 @@ export function nextStep(bond: BondView, now: number, t: T = ruT): NextStep {
 
   const maturity = bond.events.find((e) => e.kind === KIND.MATURITY);
   if (maturity && now >= maturity.payTs && maturity.status === STATUS.FUNDED && bond.supply > 0) {
-    const holder = bond.holders.find((h) => h.balance > 0);
     return {
       tone: "action",
-      text: t("Срок погашения наступил: держатели сдают облигации (они сжигаются) и получают номинал вместе с последним купоном."),
-      go: { role: "investor", who: holder ? investorKey(bond, holder.owner) : undefined, label: t("Погасить как инвестор") },
+      text: t("Срок погашения наступил: оператор одной командой выплачивает держателям номинал вместе с последним купоном, а программа сжигает облигации."),
+      go: { role: "operator", label: t("Исполнить погашение как оператор") },
     };
   }
 

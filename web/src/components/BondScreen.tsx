@@ -622,7 +622,7 @@ function LifecycleSteps({ bond, e }: { bond: BondView; e: EventView }) {
       ? last((o) => o.name === "declare_partial_redemption" && o.actionId === anchor?.actionId)
       : ops.find((o) => o.name === "create_bond");
   const funded = e.kind === KIND.PARTIAL_REDEMPTION ? created : last((o) => o.name === "fund_action" && o.actionId === e.actionId);
-  const paidOp = last((o) => ["claim", "pay_holder", "claim_to_bank", "redeem"].includes(o.name) && (o.actionId === e.actionId || o.name === "redeem"));
+  const paidOp = last((o) => ["claim", "pay_holder", "claim_to_bank", "redeem", "redeem_for"].includes(o.name) && (o.actionId === e.actionId || o.name.startsWith("redeem")));
   const rows = executionRows(bond, e);
   const paid = rows.filter((r) => r.claim).length;
   const isFunded = e.funded >= e.required && e.required > 0;
@@ -800,6 +800,8 @@ function describe(bond: BondView, op: OpView, t: T) {
       return t("{who} получил выплату по {event}", { who, event });
     case "redeem":
       return t("{who} сдал облигации и получил номинал", { who });
+    case "redeem_for":
+      return t("Оператор погасил облигации {to}: номинал выплачен, облигации сожжены", { to });
     case "pay_holder":
       return t("Оператор исполнил выплату по {event}: {n} держателям на кошельки", { event, n: op.units ?? 1 });
     case "claim_to_bank":

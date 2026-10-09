@@ -128,6 +128,15 @@ export async function perform(bond: BondView, a: Action): Promise<string> {
       // The operator pays every holder of the record date who has not been paid yet.
       const e = bond.events.find((x) => x.actionId === a.actionId);
       if (!e) throw new Error("Неизвестное событие");
+      if (e.kind === KIND.MATURITY) {
+        // Redemption: the operator pays principal and burns, one holder per transaction.
+        const coupon = bond.events.find((x) => x.kind === KIND.COUPON && x.payTs === e.payTs)!;
+        const holders = bond.holders.filter((h) => h.balance > 0).map((h) => new PublicKey(h.owner));
+        if (!holders.length) throw new Error("Все держатели уже получили выплату");
+        let sig = "";
+        for (const owner of holders) sig = await c.redeemFor(keys.operator, owner, e.actionId, coupon.actionId);
+        return sig;
+      }
       const owners = bond.holders
         .filter((h) => (h.unitsAt[e.pos] ?? 0) > 0 && !bond.claims.some((cl) => cl.owner === h.owner && cl.actionId === e.actionId))
         .map((h) => new PublicKey(h.owner));
@@ -174,6 +183,7 @@ const ERRORS: Record<string, string> = {
   NotOperator: "Действие доступно только регистратору",
   PriceAboveLimit: "Итоговая сумма выше лимита покупателя",
   InvalidPrice: "Цена должна быть больше нуля",
+  OperatorRedemptionUnavailable: "Этот выпуск создан до погашения оператором — облигации сдают сами держатели",
 };
 
 /** Anchor/RPC error → short Russian message; a repeated claim shows as "already in use". */

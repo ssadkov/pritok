@@ -454,6 +454,32 @@ impl Env {
         send(&mut self.svm, &[ix], signer, &[])
     }
 
+    fn redeem_for(&mut self, signer: &Keypair, owner: &Pubkey) -> Result<(), String> {
+        let ix = Instruction {
+            program_id: pritok::ID,
+            accounts: pritok::accounts::RedeemFor {
+                operator: signer.pubkey(),
+                config: self.config,
+                owner: *owner,
+                bond: self.bond,
+                holder: holder_pda(&self.bond, owner),
+                maturity_claim: self.claim_pda(MAT, owner),
+                coupon_claim: self.claim_pda(C4, owner),
+                bond_mint: self.bond_mint,
+                owner_bond_ata: bond_ata(owner, &self.bond_mint),
+                payment_mint: self.tkzt,
+                vault: self.vault(),
+                owner_payment: tkzt_ata(owner, &self.tkzt),
+                bond_token_program: spl_token_2022::ID,
+                payment_token_program: spl_token::ID,
+                system_program: anchor_lang::system_program::ID,
+            }
+            .to_account_metas(None),
+            data: pritok::instruction::RedeemFor { maturity_action_id: MAT, coupon_action_id: C4 }.data(),
+        };
+        send(&mut self.svm, &[ix], signer, &[])
+    }
+
     fn receipt(&self, action_id: u8, owner: &Pubkey) -> pritok::state::Claim {
         read(&self.svm, &self.claim_pda(action_id, owner))
     }
@@ -969,4 +995,39 @@ fn operator_executes_payout_for_all_holders() {
     env.assert_reserve();
     let err = env.pay_holder(&op, &a.pubkey(), MAT, a_ata).unwrap_err();
     assert!(err.contains("WrongActionKind"), "{err}");
+}
+
+/// The operator redeems for a holder: principal and the last coupon to the holder's
+/// own account, bonds burned by the program as permanent delegate.
+#[test]
+fn operator_redeems_for_holder() {
+    let mut env = setup();
+    let (a, b, f) = env.placed();
+    let op = env.operator.insecure_clone();
+    let issuer = env.issuer.insecure_clone();
+    for id in [C1, C2, C3, C4] {
+        env.fund(id, COUPON * 1_000).unwrap();
+    }
+    env.fund(MAT, FACE * 1_000).unwrap();
+
+    let err = env.redeem_for(&op, &a.pubkey()).unwrap_err();
+    assert!(err.contains("NotPayable"), "{err}");
+    let t = pay_ts(&env, MAT);
+    warp(&mut env.svm, t);
+
+    let err = env.redeem_for(&issuer, &a.pubkey()).unwrap_err();
+    assert!(err.contains("NotOperator"), "{err}");
+
+    let before = env.tkzt_balance(&a.pubkey());
+    env.redeem_for(&op, &a.pubkey()).unwrap();
+    assert_eq!(env.tkzt_balance(&a.pubkey()) - before, 300 * (FACE + COUPON), "principal and the last coupon");
+    assert_eq!(env.token_balance(&a.pubkey()), 0, "bonds burned");
+    assert!(env.redeem_for(&op, &a.pubkey()).is_err(), "no double redemption");
+    assert!(env.redeem(&a).is_err(), "nor by the holder afterwards");
+
+    env.redeem(&b).unwrap(); // the holder can still redeem by themselves
+    env.redeem_for(&op, &f.pubkey()).unwrap();
+    assert_eq!(env.bond_state().supply, 0);
+    assert_eq!(env.bond_state().reserved, 3 * COUPON * 1_000, "coupons 1-3 were funded but never claimed");
+    env.assert_reserve();
 }

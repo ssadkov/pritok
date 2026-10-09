@@ -306,49 +306,50 @@ pub struct Redeem<'info> {
     pub system_program: Program<'info, System>,
 }
 
-/// Burns the holder's bonds and pays principal. The last coupon is paid in the same
-/// instruction when it is funded and not yet claimed; otherwise it stays claimable.
-pub fn redeem_handler(ctx: Context<Redeem>, maturity_action_id: u8, coupon_action_id: u8) -> Result<()> {
-    let now = Clock::get()?.unix_timestamp;
-    let m_pos = ctx.accounts.bond.position(maturity_action_id).ok_or(PritokError::UnknownAction)?;
-    let c_pos = ctx.accounts.bond.position(coupon_action_id).ok_or(PritokError::UnknownAction)?;
-    let maturity = ctx.accounts.bond.events[m_pos];
-    let coupon = ctx.accounts.bond.events[c_pos];
+/// Pays principal and, when funded and not yet claimed, the last coupon. Shared by the
+/// holder's `redeem` and the operator's `redeem_for`; the caller burns the bonds after.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn settle_maturity<'info>(
+    bond: &mut Account<'info, Bond>,
+    holder: &mut Account<'info, Holder>,
+    maturity_claim: &mut Account<'info, Claim>,
+    maturity_bump: u8,
+    coupon_claim: &AccountInfo<'info>,
+    coupon_bump: u8,
+    maturity_action_id: u8,
+    coupon_action_id: u8,
+    payer: &AccountInfo<'info>,
+    system_program: &AccountInfo<'info>,
+    token_program: &Interface<'info, TokenInterface>,
+    vault: &InterfaceAccount<'info, TokenAccount>,
+    mint: &InterfaceAccount<'info, Mint>,
+    to: &InterfaceAccount<'info, TokenAccount>,
+    now: i64,
+) -> Result<()> {
+    let m_pos = bond.position(maturity_action_id).ok_or(PritokError::UnknownAction)?;
+    let c_pos = bond.position(coupon_action_id).ok_or(PritokError::UnknownAction)?;
+    let maturity = bond.events[m_pos];
+    let coupon = bond.events[c_pos];
     require!(
         maturity.kind == kind::MATURITY && coupon.kind == kind::COUPON && coupon.pay_ts == maturity.pay_ts,
         PritokError::WrongActionKind
     );
 
     // Record-date balances are frozen before the burn changes the balance.
-    ctx.accounts.holder.sync(&ctx.accounts.bond, now);
+    holder.sync(bond, now);
 
-    pay_event(
-        &mut ctx.accounts.bond,
-        m_pos,
-        &ctx.accounts.holder,
-        &mut ctx.accounts.maturity_claim,
-        ctx.bumps.maturity_claim,
-        now,
-        &ctx.accounts.payment_token_program,
-        &ctx.accounts.vault,
-        &ctx.accounts.payment_mint,
-        &ctx.accounts.owner_payment,
-    )?;
+    pay_event(bond, m_pos, holder, maturity_claim, maturity_bump, now, token_program, vault, mint, to)?;
 
-    let coupon_unclaimed = ctx.accounts.coupon_claim.data_is_empty();
+    let coupon_unclaimed = coupon_claim.data_is_empty();
     if coupon_unclaimed && coupon.mode == mode::ONCHAIN && coupon.status == event_status::FUNDED {
-        let bond_key = ctx.accounts.bond.key();
-        let owner_key = ctx.accounts.owner.key();
-        let bump = ctx.bumps.coupon_claim;
-        let seeds: &[&[u8]] = &[b"claim", bond_key.as_ref(), &[coupon_action_id], owner_key.as_ref(), &[bump]];
+        let bond_key = bond.key();
+        let owner_key = holder.owner;
+        let seeds: &[&[u8]] = &[b"claim", bond_key.as_ref(), &[coupon_action_id], owner_key.as_ref(), &[coupon_bump]];
         let space = 8 + Claim::INIT_SPACE;
         anchor_lang::system_program::create_account(
             CpiContext::new_with_signer(
-                ctx.accounts.system_program.to_account_info(),
-                anchor_lang::system_program::CreateAccount {
-                    from: ctx.accounts.owner.to_account_info(),
-                    to: ctx.accounts.coupon_claim.to_account_info(),
-                },
+                system_program.clone(),
+                anchor_lang::system_program::CreateAccount { from: payer.clone(), to: coupon_claim.clone() },
                 &[seeds],
             ),
             Rent::get()?.minimum_balance(space),
@@ -363,56 +364,59 @@ pub fn redeem_handler(ctx: Context<Redeem>, maturity_action_id: u8, coupon_actio
             amount: 0,
             status: claim_status::PAID,
             bank_ref_hash: [0; 32],
-            bump,
+            bump: coupon_bump,
         };
-        pay_event(
-            &mut ctx.accounts.bond,
-            c_pos,
-            &ctx.accounts.holder,
-            &mut receipt,
-            bump,
-            now,
-            &ctx.accounts.payment_token_program,
-            &ctx.accounts.vault,
-            &ctx.accounts.payment_mint,
-            &ctx.accounts.owner_payment,
-        )?;
-        let info = ctx.accounts.coupon_claim.to_account_info();
-        let mut data = info.try_borrow_mut_data()?;
+        pay_event(bond, c_pos, holder, &mut receipt, coupon_bump, now, token_program, vault, mint, to)?;
+        let mut data = coupon_claim.try_borrow_mut_data()?;
         let mut writer: &mut [u8] = &mut data[..];
         receipt.try_serialize(&mut writer)?;
     }
+    Ok(())
+}
 
-    let units = ctx.accounts.holder.balance;
-    token_ops::require_canonical_ata(
-        &ctx.accounts.owner_bond_ata.key(),
-        &ctx.accounts.owner.key(),
-        &ctx.accounts.bond_mint.key(),
+/// Burns the holder's bonds and pays principal. The last coupon is paid in the same
+/// instruction when it is funded and not yet claimed; otherwise it stays claimable.
+pub fn redeem_handler(mut ctx: Context<Redeem>, maturity_action_id: u8, coupon_action_id: u8) -> Result<()> {
+    let now = Clock::get()?.unix_timestamp;
+    let a = &mut ctx.accounts;
+    settle_maturity(
+        &mut a.bond,
+        &mut a.holder,
+        &mut a.maturity_claim,
+        ctx.bumps.maturity_claim,
+        &a.coupon_claim.to_account_info(),
+        ctx.bumps.coupon_claim,
+        maturity_action_id,
+        coupon_action_id,
+        &a.owner.to_account_info(),
+        &a.system_program.to_account_info(),
+        &a.payment_token_program,
+        &a.vault,
+        &a.payment_mint,
+        &a.owner_payment,
+        now,
     )?;
-    let token_program = ctx.accounts.bond_token_program.to_account_info();
-    let ata = ctx.accounts.owner_bond_ata.to_account_info();
-    let mint = ctx.accounts.bond_mint.to_account_info();
-    let bond_info = ctx.accounts.bond.to_account_info();
-    let bond = &ctx.accounts.bond;
-    let bond_id = bond.bond_id.to_le_bytes();
-    let seeds: &[&[u8]] = &[b"bond", bond.issuer.as_ref(), &bond_id, &[bond.bump]];
+
+    let units = a.holder.balance;
+    token_ops::require_canonical_ata(&a.owner_bond_ata.key(), &a.owner.key(), &a.bond_mint.key())?;
+    let token_program = a.bond_token_program.to_account_info();
+    let ata = a.owner_bond_ata.to_account_info();
+    let mint = a.bond_mint.to_account_info();
+    let bond_info = a.bond.to_account_info();
+    let bond_id = a.bond.bond_id.to_le_bytes();
+    let seeds: &[&[u8]] = &[b"bond", a.bond.issuer.as_ref(), &bond_id, &[a.bond.bump]];
     let signer = &[seeds];
     token_ops::thaw(&token_program, &ata, &mint, &bond_info, signer)?;
     token_2022::burn(
         CpiContext::new(
             token_program.clone(),
-            token_2022::Burn {
-                mint: mint.clone(),
-                from: ata.clone(),
-                authority: ctx.accounts.owner.to_account_info(),
-            },
+            token_2022::Burn { mint: mint.clone(), from: ata.clone(), authority: a.owner.to_account_info() },
         ),
         units,
     )?;
     token_ops::freeze(&token_program, &ata, &mint, &bond_info, signer)?;
 
-    ctx.accounts.holder.balance = 0;
-    let bond = &mut ctx.accounts.bond;
-    bond.supply -= units;
-    check_reserve(&mut ctx.accounts.vault, &ctx.accounts.bond)
+    a.holder.balance = 0;
+    a.bond.supply -= units;
+    check_reserve(&mut a.vault, &a.bond)
 }

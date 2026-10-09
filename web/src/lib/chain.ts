@@ -41,6 +41,8 @@ function decodeOp(sig: string, tx: ParsedTransactionWithMeta | null): OpView | n
       return { ...base, actor: acc[0], actionId: n("action_id") };
     case "redeem":
       return { ...base, actor: acc[0] };
+    case "redeem_for":
+      return { ...base, actor: acc[0], counterparty: acc[2] };
     case "fund_action":
       return { ...base, actor: acc[0], actionId: n("action_id"), amount: n("amount") };
     case "declare_partial_redemption":

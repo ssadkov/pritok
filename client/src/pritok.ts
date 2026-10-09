@@ -290,6 +290,35 @@ export class BondClient {
     return (this.program.provider as AnchorProvider).sendAndConfirm(tx, [operator]);
   }
 
+  /** Operator-run redemption: principal (and the last coupon if due) to the holder; the program burns the bonds. */
+  async redeemFor(operator: Keypair, owner: PublicKey, maturityActionId: number, couponActionId: number) {
+    const ownerPayment = payAta(owner, this.paymentMint);
+    return this.program.methods
+      .redeemFor(maturityActionId, couponActionId)
+      .accountsPartial({
+        operator: operator.publicKey,
+        config: configPda(),
+        owner,
+        bond: this.bond,
+        holder: holderPda(this.bond, owner),
+        maturityClaim: claimPda(this.bond, maturityActionId, owner),
+        couponClaim: claimPda(this.bond, couponActionId, owner),
+        bondMint: this.bondMint,
+        ownerBondAta: bondAta(owner, this.bondMint),
+        paymentMint: this.paymentMint,
+        vault: this.vault,
+        ownerPayment,
+        bondTokenProgram: TOKEN_2022_PROGRAM_ID,
+        paymentTokenProgram: TOKEN_PROGRAM_ID,
+        systemProgram: SystemProgram.programId,
+      })
+      .preInstructions([
+        createAssociatedTokenAccountIdempotentInstruction(operator.publicKey, ownerPayment, owner, this.paymentMint, TOKEN_PROGRAM_ID),
+      ])
+      .signers([operator])
+      .rpc();
+  }
+
   async confirmBankPayment(operator: Keypair, owner: PublicKey, actionId: number, bankRefHash: number[]) {
     return this.program.methods
       .confirmBankPayment(actionId, bankRefHash)

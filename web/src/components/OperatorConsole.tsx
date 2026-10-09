@@ -130,21 +130,24 @@ export function CorporateActions({ bond, a }: { bond: BondView; a: Act }) {
                     )}
                   </td>
                   <td className="ca-actions">
-                    {stage === "executing" && e.kind !== KIND.MATURITY && (
+                    {stage === "executing" && (
                       <Btn
                         a={a}
                         id={`exec-${e.actionId}`}
+                        title={e.kind === KIND.MATURITY ? t("Номинал и последний купон — держателям, облигации сжигаются программой") : undefined}
                         onClick={() =>
-                          a.act(`exec-${e.actionId}`, t("Выплата «{event}» исполнена: {n} держателей", { event: title, n: rows.length - paid }), {
-                            type: "execute",
-                            actionId: e.actionId,
-                          })
+                          a.act(
+                            `exec-${e.actionId}`,
+                            e.kind === KIND.MATURITY
+                              ? t("Погашение исполнено: облигации {n} держателей сожжены, номинал выплачен", { n: rows.length - paid })
+                              : t("Выплата «{event}» исполнена: {n} держателей", { event: title, n: rows.length - paid }),
+                            { type: "execute", actionId: e.actionId },
+                          )
                         }
                       >
-                        {t("Исполнить выплату")}
+                        {e.kind === KIND.MATURITY ? t("Исполнить погашение") : t("Исполнить выплату")}
                       </Btn>
                     )}
-                    {stage === "executing" && e.kind === KIND.MATURITY && <span className="muted small">{t("держатели сдают облигации")}</span>}
                     {stage === "default" && e.status !== STATUS.DEFAULTED && (
                       <Btn
                         a={a}

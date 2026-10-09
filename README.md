@@ -2,7 +2,7 @@
 
 **Bond registry and payouts on Solana.** *Pritok* is Russian for "inflow": coupons and principal flowing to bondholders on schedule.
 
-PRITOK services a tokenized bond after placement — the job of a registrar and a paying agent. It knows who held the bond on each record date, calculates what every holder is owed, pays it onchain or routes it to a bank, retires the bonds at maturity, and shows publicly when an issuer has not paid. Every entitlement and every payment can be checked in the Solana explorer.
+PRITOK services a tokenized bond after placement — the job of a registrar and a paying agent. It knows who held the bond on each record date, calculates what every holder is owed, and lets the platform operator execute each corporate action for all holders with one command: pay onchain or route to a bank, retire the bonds at maturity. It shows publicly when an issuer has not paid. Every entitlement and every payment can be checked in the Solana explorer.
 
 Built for the Superteam Kazakhstan × KASE side track [*Corporate Actions on Blockchain*](https://superteam.fun/earn/listing/superteam-kazakhstan-x-kase-side-track-corporate-actions-on-blockchain). Independent prototype, not affiliated with KASE.
 
@@ -11,7 +11,7 @@ Built for the Superteam Kazakhstan × KASE side track [*Corporate Actions on Blo
 | **Live demo** | **https://pritok-sol.vercel.app** — Solana devnet, role screens with one-click demo signing |
 | Program | [`9LMSMqD3xMBaNdfRb4bKDT3MBTX8ry1Na84rMSJ787aY`](https://explorer.solana.com/address/9LMSMqD3xMBaNdfRb4bKDT3MBTX8ry1Na84rMSJ787aY?cluster=devnet) on devnet |
 | Full lifecycle on devnet | [`FCNB…C6ry`](https://pritok-sol.vercel.app/bond/FCNBFwobxkZw7k7n5U3KsRjzR1VSTtXiAD13FsvQC6ry) — coupons, 20% amortization, a default and its cure, wallet and bank payouts, redemption with burn |
-| Tests | 19 passing: 7 unit, 12 integration on LiteSVM |
+| Tests | 21 passing: 7 unit, 14 integration on LiteSVM |
 
 ![Public registry of a matured bond](docs/img/registry.png)
 
@@ -21,9 +21,9 @@ Built for the Superteam Kazakhstan × KASE side track [*Corporate Actions on Blo
 2. Follow the **Now** bar at the top. It reads the bond's state and offers the next step with a button that switches to the right role.
 3. **Investor**: transfer or sell bonds before the record date and watch the coupon follow the bond. Sell at a clean price and see the accrued interest the program adds.
 4. **Issuer**: fund a coupon, or fund only 75% to trigger a public default, then pay the rest to cure it. Declare a partial redemption on a future coupon date.
-5. **Investor**: claim a payout to the wallet, or choose **To bank**.
-6. **Registrar** (registrar and paying agent): confirm the bank transfer with a payment reference.
-7. At maturity the investor redeems: the bonds are burned, and principal plus the last coupon are paid in one transaction.
+5. **Operator** (platform operator: registrar and paying agent): the console lists every corporate action of the issue with its stage — register fixed, funded, executed. **Execute payout** pays a coupon to all holders with one command; the execution report shows each holder's payout with its onchain receipt and exports CSV. A holder can also claim earlier, to the wallet or **To bank**.
+6. **Operator**: confirm a bank transfer with a payment reference.
+7. At maturity the operator presses **Execute redemption**: principal and the last coupon go to each holder, and the program burns the bonds. A holder can still redeem by themselves.
 8. **Portfolio** shows the investor's side across all issues: invested, received, what is due now, a payout calendar.
 
 **How it works** replays a 9-step tour of the screen. A **?** next to a term explains it in plain language.
@@ -32,12 +32,12 @@ Built for the Superteam Kazakhstan × KASE side track [*Corporate Actions on Blo
 
 | Requirement | How PRITOK does it | Where to see it |
 |---|---|---|
-| Test tokenized instrument with holder registry | Token-2022 bond mint, one holder record per wallet per bond, admission by the registrar | Registry at date, registrar screen |
+| Test tokenized instrument with holder registry | Token-2022 bond mint, one holder record per wallet per bond, admission by the operator | Registry at date, operator console |
 | **Coupon payment**: holders on the record date | Record-date balances frozen onchain at every balance change (see [record dates](#record-dates)) | *Holder register as of* |
 | Coupon: calculate each investor's entitlement | `units at record date × coupon per bond`, per holder | Calculation panel of any event |
-| Coupon: execute onchain or show a settlement flow | Both: stablecoin to the wallet, or to a paying agent with bank confirmation | Investor and registrar screens |
+| Coupon: execute onchain or show a settlement flow | Both. The operator executes the payout for all holders with one command (`pay_holder`), or a holder claims; to the wallet in stablecoin, or to a paying agent with bank confirmation | Operator console, event card stages |
 | **Redemption**: identify holders, principal due | Transfers close at the maturity record date; principal on the current face after amortization | Maturity event |
-| Redemption: settle and retire tokens | `redeem` burns the bonds and pays principal + last coupon atomically | "N redeemed and burned", journal |
+| Redemption: settle and retire tokens | `redeem_for` (operator) or `redeem` (holder) burns the bonds and pays principal + last coupon atomically | Operator console, "N redeemed and burned", journal |
 | One additional corporate action | **Partial redemption** (amortization), plus secondary **DvP trade** with accrued interest and **default & cure** | Issuer screen, sale form |
 | Verifiable onchain record | Receipt account per payout, every operation decoded in the journal with an explorer link | Journal, "to wallet ↗" receipt links |
 | Clear line between implemented and simulated | [Table below](#implemented-vs-simulated) | — |
@@ -63,17 +63,17 @@ flowchart LR
 
 | Component | Role |
 |---|---|
-| `programs/pritok` | Anchor program: 16 instructions, all corporate-action logic and money movement |
+| `programs/pritok` | Anchor program: 18 instructions, all corporate-action logic and money movement |
 | Token-2022 bond mint | `DefaultAccountState = Frozen`; mint and freeze authority is the bond PDA |
 | tKZT | Test tenge (classic SPL token, 2 decimals) used for placement, payouts and trades |
-| `web/` | Next.js: public registry, issuer / investor / registrar screens, all-issues list, portfolio. Reads accounts and decodes the program's transaction history server-side |
+| `web/` | Next.js: public registry, operator console, issuer and investor screens, all-issues list, portfolio. Reads accounts and decodes the program's transaction history server-side |
 | `client/` | TypeScript client shared with the web app, and a scripted end-to-end devnet scenario |
 
 ### Accounts
 
 | Account | Seeds | Holds |
 |---|---|---|
-| `Config` | `["config"]` | registrar (operator), pause flag, allowed payment tokens |
+| `Config` | `["config"]` | platform operator (registrar and paying agent), pause flag, allowed payment tokens |
 | `Bond` | `["bond", issuer, bond_id]` | terms, current face factor, `issued_units`, `supply`, reserved obligations, up to 8 events sorted by record date |
 | Bond mint | `["mint", bond]` | Token-2022 mint, 0 decimals |
 | Payment vault | ATA of the bond PDA | funded, not yet claimed obligations |
@@ -84,7 +84,7 @@ flowchart LR
 
 | Who | Instructions |
 |---|---|
-| Registrar | `init_config`, `allow_holder`, `revoke_holder`, `set_paused`, `confirm_bank_payment` |
+| Operator | `init_config`, `allow_holder`, `revoke_holder`, `set_paused`, `pay_holder`, `redeem_for`, `claim_to_bank` (for a holder), `confirm_bank_payment` |
 | Issuer | `create_bond`, `fund_action`, `declare_partial_redemption` |
 | Holder | `subscribe`, `transfer_bond`, `trade_dvp` (with the counterparty), `claim`, `claim_to_bank`, `redeem` |
 | Anyone | `close_subscription`, `mark_default` |
@@ -105,6 +105,7 @@ Rules that keep this correct, each covered by a test:
 - Units used for every entitlement are fixed when the subscription closes (`issued_units`); later burns do not shrink what is owed.
 - Transfers and trades are closed from the maturity record date, so the right to principal and the token to burn stay with the same holder.
 - Bond token accounts are always frozen: a holder cannot move, burn, delegate or re-assign bonds directly through Token-2022. Every attempt fails with `AccountFrozen`.
+- The bond PDA is the mint's permanent delegate, so the program can burn bonds in an operator-run redemption. No person holds that right, and the program uses it only in `redeem_for`, against a principal payment. Issues created before 2026-10-10 lack the extension; their holders redeem by themselves.
 
 ## Entitlements
 
@@ -128,7 +129,8 @@ Amounts are rounded down per holder; any dust stays in the vault. The issuer nev
 
 ## Settlement flows
 
-- **Wallet payout.** After the payment date a holder claims; the vault pays the tKZT and a receipt account is created. A second claim fails because the receipt already exists.
+- **Operator execution.** After the payment date the operator runs `pay_holder` for every holder of record, several per transaction: the vault pays each holder's own token account and creates the receipt. At maturity `redeem_for` pays principal and the last coupon and burns the bonds. The money can only go to the holder's own account.
+- **Wallet payout.** A holder can also claim by themselves; the same receipt account is created. A second payout fails because the receipt already exists, whoever started it.
 - **Bank payout.** The holder (or the registrar for a holder without a wallet) chooses the bank: the holder's share moves from the vault to the paying agent onchain, and the receipt is marked *bank requested*. After the bank transfer the paying agent confirms it; only a SHA-256 of the payment reference is stored. A payout goes to the wallet or to the bank, once.
 - **Default and cure.** If an event is underfunded on its payment date, anyone can mark it defaulted and the debt is public. Claims stay closed until the issuer pays the full amount; the debt is never written down.
 - **Secondary trade (DvP).** Seller and buyer sign one transaction: bonds to the buyer and money to the seller, atomically. The parties set the clean price as a share of the outstanding face; the program adds accrued interest and enforces the buyer's maximum total. The trade is logged as a `TradeSettled` event.
@@ -141,7 +143,7 @@ The vault invariant `vault balance ≥ funded and unclaimed obligations` is chec
 | Role | Can | Cannot |
 |---|---|---|
 | Issuer | create the bond, fund events, declare partial redemptions | change terms or the schedule alone, touch the registry, withdraw from the vault |
-| Registrar / paying agent | admit and revoke holders, pause subscriptions and transfers, confirm bank payouts | issue bonds, move investors' money |
+| Platform operator (registrar and paying agent) | execute payouts and redemptions to holders' own accounts, route a holder's payout to the bank, admit and revoke holders, pause subscriptions and transfers, confirm bank payouts | issue bonds, change terms, send investors' money anywhere but their own account or the paying agent |
 | Holder | subscribe, transfer, trade, claim to the wallet or the bank, redeem | change anything about the bond |
 | Anyone | mark an underfunded event as defaulted, read everything | — |
 
@@ -169,7 +171,7 @@ Revocation and pause never cancel a payout that already exists: a revoked or pau
 
 ## Testing and review
 
-- **19 tests** (`cargo test -p pritok`). Integration tests run the compiled program on LiteSVM with a controllable clock:
+- **21 tests** (`cargo test -p pritok`). Integration tests run the compiled program on LiteSVM with a controllable clock:
   - direct Token-2022 bypasses fail with `AccountFrozen`;
   - transfer before and after a record date;
   - skipped record dates;
@@ -181,7 +183,9 @@ Revocation and pause never cancel a payout that already exists: a revoked or pau
   - recreation of a closed empty token account;
   - bank payout and confirmation;
   - revocation and pause;
-  - DvP with accrued interest, ex-coupon, buyer limit and pause.
+  - DvP with accrued interest, ex-coupon, buyer limit and pause;
+  - operator execution for all holders, including a revoked holder, with no double payment against a holder's own claim;
+  - operator redemption: principal and last coupon to the holder, bonds burned by the program.
 - **Two rounds of independent design review** before the code was written (see `docs/REVIEW-BRIEF.md` and `docs/PLAN.md`). The first round replaced a transfer hook with always-frozen accounts after finding bypasses via owner burn and `SetAuthority`. The second fixed amortization timing, fixed `issued_units`, restricted payment mints and added the vault reserve.
 - Complete lifecycles run on devnet: three bonds from placement to redemption, one of them entirely through the web app's action API.
 

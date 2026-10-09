@@ -66,4 +66,6 @@ pub enum PritokError {
     InvalidPrice,
     #[msg("Total price exceeds the buyer's limit")]
     PriceAboveLimit,
+    #[msg("This issue was created without operator redemption")]
+    OperatorRedemptionUnavailable,
 }
