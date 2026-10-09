@@ -58,7 +58,9 @@ export async function latestDemoBond(): Promise<string | null> {
 
 async function chainTime() {
   const { conn } = demoContext();
-  return (await conn.getBlockTime(await conn.getSlot())) ?? Math.floor(Date.now() / 1000);
+  // A just-produced slot often has no block time yet on devnet: fall back to the clock.
+  const t = await conn.getBlockTime(await conn.getSlot()).catch(() => null);
+  return t ?? Math.floor(Date.now() / 1000);
 }
 
 /** Keeps demo wallets able to pay rent and fees, and to buy and pay out bonds. */
@@ -68,7 +70,10 @@ async function topUp(tkzt: PublicKey, issueTiyn: bigint) {
   const tx = new Transaction();
   const balances = await Promise.all(actors.map((a) => conn.getBalance(a.publicKey)));
   actors.forEach((a, i) => {
-    if (balances[i] < MIN_SOL) tx.add(SystemProgram.transfer({ fromPubkey: keys.payer.publicKey, toPubkey: a.publicKey, lamports: TOP_UP_SOL }));
+    // The operator pays rent for every receipt it creates when executing payouts: keep more on it.
+    const op = a === keys.operator;
+    if (balances[i] < (op ? 4 : 1) * MIN_SOL)
+      tx.add(SystemProgram.transfer({ fromPubkey: keys.payer.publicKey, toPubkey: a.publicKey, lamports: (op ? 5 : 1) * TOP_UP_SOL }));
   });
   if (tx.instructions.length) await conn.sendTransaction(tx, [keys.payer]).then((s) => conn.confirmTransaction(s, "confirmed"));
 

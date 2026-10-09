@@ -317,7 +317,7 @@
 .ca-table td, .ca-table th { white-space: nowrap; }
 .ca-table tr[aria-selected="true"] td { background: var(--bg); }
 .ca-actions { text-align: right; }
-.ca-actions .btn { padding: 6px 12px; }
+.ca-actions .btn { padding: 6px 12px; margin-right: 10px; }
 .ca-report { margin-top: 14px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 12px; }
 .ca-report-h { display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px; margin-bottom: 6px; }
 .ca-report-h .linkbtn { margin-left: auto; }

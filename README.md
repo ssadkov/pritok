@@ -13,7 +13,7 @@ Built for the Superteam Kazakhstan × KASE side track [*Corporate Actions on Blo
 | Full lifecycle on devnet | [`FCNB…C6ry`](https://pritok-sol.vercel.app/bond/FCNBFwobxkZw7k7n5U3KsRjzR1VSTtXiAD13FsvQC6ry) — coupons, 20% amortization, a default and its cure, wallet and bank payouts, redemption with burn |
 | Tests | 21 passing: 7 unit, 14 integration on LiteSVM |
 
-![Public registry of a matured bond](docs/img/registry.png)
+![Public view of a bond executed end to end by the operator](docs/img/registry.png)
 
 ## Try it in three minutes
 
@@ -162,10 +162,14 @@ Revocation and pause never cancel a payout that already exists: a revoked or pau
 
 ## Screens
 
+![Platform operator console](docs/img/operator.png)
+
+Operator console: every corporate action of the issue with its stage. Coupon 1 executed for all three holders, coupon 2 funded and ready to execute with one command, later events waiting for the issuer.
+
 | | |
 |---|---|
-| ![Registrar and paying agent](docs/img/registrar.png) | ![Investor portfolio](docs/img/portfolio.png) |
-| Registrar: bank payouts confirmed with reference hashes, admission, pause | Investor portfolio: result, payouts due now, next payout, calendar, holdings |
+| ![New issue form](docs/img/newissue.png) | ![Investor portfolio](docs/img/portfolio.png) |
+| Issuer's form: face value, coupon, term and size, with the coupon per bond and what the issuer raises and pays back | Investor portfolio: result, payouts due now, next payout, calendar, holdings, history |
 
 ![All issues](docs/img/bonds.png)
 
