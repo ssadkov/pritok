@@ -190,6 +190,7 @@ Revocation and pause never cancel a payout that already exists: a revoked or pau
 - **Admission is per bond.** In a real market an investor passes KYC once. Next step: an investor registry shared across issues.
 - **Bank confirmation is an attestation.** A production integration needs reconciliation with the paying agent's bank statement.
 - **At most 8 events per bond:** 4 coupons, maturity and up to 3 partial redemptions.
+- **No tax withholding.** Payouts are gross. In Kazakhstan the broker or paying agent often acts as tax agent and withholds tax on coupons, for example for non-residents. In a pilot that role stays with the paying agent or broker: the program would pay it the gross amount and the agent pays holders net.
 - Next: KZTE or another tenge stablecoin as the payment token, coupons per year as an issue parameter (today semi-annual), 30/360 accrued interest on real dates, bondholder voting, a yield-to-maturity display.
 
 ## Build and run
