@@ -1,14 +1,19 @@
 import type { Metadata } from "next";
+import { cookies } from "next/headers";
+import { DEFAULT_LANG, isLang } from "@/lib/i18n-core";
+import { LangProvider } from "@/lib/i18n";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "PRITOK — реестр и выплаты",
-  description: "Реестр держателей и выплаты по токенизированным облигациям на Solana",
+  title: "PRITOK — bond registry and payouts",
+  description: "Holder registry and corporate-action payouts for tokenized bonds on Solana",
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const saved = (await cookies()).get("lang")?.value;
+  const lang = isLang(saved) ? saved : DEFAULT_LANG;
   return (
-    <html lang="ru">
+    <html lang={lang}>
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
@@ -18,7 +23,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           rel="stylesheet"
         />
       </head>
-      <body>{children}</body>
+      <body>
+        <LangProvider initial={lang}>{children}</LangProvider>
+      </body>
     </html>
   );
 }

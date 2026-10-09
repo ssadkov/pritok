@@ -2,10 +2,12 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { nextStep } from "@/lib/next-step";
+import { LangSwitch, useT } from "@/lib/i18n";
+import { ruPlural, type T } from "@/lib/i18n-core";
 import { NewBondButton } from "./NewBondButton";
 import { Term, startTour, useFirstVisitTour } from "./Tour";
 import { InvestorPanel, IssuerPanel, OperatorPanel, Toast, useAct, type Role } from "./RolePanels";
-import { ISSUER_NAME, colorFor, label } from "@/lib/demo";
+import { colorFor, issuerOf, nameOf } from "@/lib/demo";
 import {
   CLAIM,
   KIND,
@@ -73,13 +75,14 @@ function useNow(bond: BondView | null, fetchedAt: number) {
 }
 
 export function BondScreen({ address }: { address: string }) {
+  const t = useT();
   const { bond, error, fetchedAt, reload } = useBond(address);
   const now = useNow(bond, fetchedAt);
   const [selected, setSelected] = useState<number | null>(null);
   const [role, setRoleState] = useState<Role>("public");
   const [who, setWhoState] = useState<"aigerim" | "bolat" | "fund">("aigerim");
   const a = useAct(address, reload);
-  useFirstVisitTour(!!bond);
+  useFirstVisitTour(!!bond, t);
 
   // Role and investor live in the URL (?as=investor&who=bolat) so a view can be shared.
   useEffect(() => {
@@ -90,7 +93,9 @@ export function BondScreen({ address }: { address: string }) {
     if (w === "aigerim" || w === "bolat" || w === "fund") setWhoState(w);
   }, []);
   const syncUrl = (r: Role, w: string) => {
-    const q = new URLSearchParams();
+    const q = new URLSearchParams(window.location.search);
+    q.delete("as");
+    q.delete("who");
     if (r !== "public") q.set("as", r);
     if (r === "investor") q.set("who", w);
     const qs = q.toString();
@@ -110,7 +115,9 @@ export function BondScreen({ address }: { address: string }) {
       <>
         <TopBar bond={null} now={0} stale={!!error} role="public" setRole={() => {}} />
         <main className="wrap">
-          <div className="card card-b empty">{error ? `Не удалось загрузить выпуск: ${error}` : "Загружаем выпуск из devnet…"}</div>
+          <div className="card card-b empty">
+            {error ? t("Не удалось загрузить выпуск: {error}", { error: t(error) }) : t("Загружаем выпуск из devnet…")}
+          </div>
         </main>
       </>
     );
@@ -127,7 +134,8 @@ export function BondScreen({ address }: { address: string }) {
         {demo && bond.supply === 0 && bond.subscriptionClosed && (
           <div className="card banner">
             <div>
-              <b>Этот выпуск уже погашен.</b> Кнопки ролей работают на живом выпуске — запустите новый: он будет создан, размещён среди трёх инвесторов и пройдёт весь цикл примерно за 17 минут.
+              <b>{t("Этот выпуск уже погашен.")}</b>{" "}
+              {t("Кнопки ролей работают на живом выпуске — запустите новый: он будет создан, размещён среди трёх инвесторов и пройдёт весь цикл примерно за 17 минут.")}
             </div>
             <NewBondButton />
           </div>
@@ -157,7 +165,7 @@ export function BondScreen({ address }: { address: string }) {
                 busy={!!a.busy}
                 onDefault={
                   demo
-                    ? (actionId) => a.act("default-" + actionId, "Технический дефолт зафиксирован", { type: "markDefault", actionId })
+                    ? (actionId) => a.act("default-" + actionId, t("Технический дефолт зафиксирован"), { type: "markDefault", actionId })
                     : undefined
                 }
               />
@@ -167,9 +175,9 @@ export function BondScreen({ address }: { address: string }) {
         <Registry bond={bond} />
         <Journal bond={bond} />
         <footer>
-          <span>PRITOK — независимый прототип для трека Superteam Kazakhstan × KASE. Не аффилирован с KASE.</span>
+          <span>{t("PRITOK — независимый прототип для трека Superteam Kazakhstan × KASE. Не аффилирован с KASE.")}</span>
           <span>
-            Программа{" "}
+            {t("Программа")}{" "}
             <a className="addr" href={explorerAddr(bond.program, bond.cluster)} target="_blank" rel="noopener">
               {short(bond.program)} ↗
             </a>
@@ -191,12 +199,12 @@ function pickDefaultEvent(bond: BondView) {
 
 // ------------------------------------------------------------------ top bar
 
-function nextMilestone(bond: BondView, now: number) {
+function nextMilestone(bond: BondView, now: number, t: T) {
   const items = bond.events.flatMap((e) => [
-    { ts: e.recordTs, text: `до фиксации «${eventTitle(bond, e)}»` },
-    { ts: e.payTs, text: `до выплаты «${eventTitle(bond, e)}»` },
+    { ts: e.recordTs, text: t("до фиксации «{event}»", { event: eventTitle(bond, e, t) }) },
+    { ts: e.payTs, text: t("до выплаты «{event}»", { event: eventTitle(bond, e, t) }) },
   ]);
-  items.push({ ts: bond.subscriptionEndTs, text: "до конца подписки" });
+  items.push({ ts: bond.subscriptionEndTs, text: t("до конца подписки") });
   return items.filter((i) => i.ts > now).sort((a, b) => a.ts - b.ts)[0];
 }
 
@@ -225,65 +233,67 @@ function TopBar({
   role: Role;
   setRole: (r: Role) => void;
 }) {
+  const t = useT();
   const demo = !!bond?.demo?.enabled;
-  const next = bond ? nextMilestone(bond, now) : undefined;
+  const next = bond ? nextMilestone(bond, now, t) : undefined;
   return (
     <header className="top">
       <div className="wrap">
         <a className="brand" href="/" style={{ textDecoration: "none" }}>
           <span className="brand-mark" />
-          PRITOK<small>реестр и выплаты</small>
+          PRITOK<small>{t("реестр и выплаты")}</small>
         </a>
         <a className="seg-link" href="/bonds" data-tour="bonds">
-          Все выпуски
+          {t("Все выпуски")}
         </a>
         <a className="seg-link" href="/portfolio">
-          Портфель
+          {t("Портфель")}
         </a>
         <div className="spacer" />
-        <span className={`live${stale ? " stale" : ""}`} title={stale ? "Нет связи с devnet — показаны последние данные" : "Данные из devnet, обновление каждые 10 с"}>
+        <span
+          className={`live${stale ? " stale" : ""}`}
+          title={stale ? t("Нет связи с devnet — показаны последние данные") : t("Данные из devnet, обновление каждые 10 с")}
+        >
           <i />
           devnet
         </span>
         {bond && (
-          <div className="clock" title={`Время в демо ускорено: 1 полугодие = ${bond.periodSecs} секунд`}>
+          <div className="clock" title={t("Время в демо ускорено: 1 полугодие = {n} секунд", { n: bond.periodSecs })}>
             <span className="dot" />
             {next ? (
               <>
                 {next.text} <b>{mmss(next.ts - now)}</b>
               </>
             ) : (
-              "все даты прошли"
+              t("все даты прошли")
             )}
           </div>
         )}
         {demo && <NewBondButton className="btn ghost small-btn" />}
-        <button className="btn ghost small-btn tour-btn" onClick={startTour} title="Короткий тур по экрану">
-          <span className="tour-long">Как это работает</span>
+        <button className="btn ghost small-btn tour-btn" onClick={() => startTour(t)} title={t("Короткий тур по экрану")}>
+          <span className="tour-long">{t("Как это работает")}</span>
           <span className="tour-short">?</span>
         </button>
-        <div className="lang">
-          KZ · EN · <b>RU</b>
-        </div>
+        <LangSwitch />
       </div>
       <div className="wrap rolebar">
         <div className="role" data-tour="roles">
-          <span className="seg-label">Смотреть как</span>
-          <div className="seg" role="group" aria-label="Роль">
+          <span className="seg-label">{t("Смотреть как")}</span>
+          <div className="seg" role="group" aria-label={t("Роль")}>
             {ROLES.map(([r, name]) => (
               <button
                 key={r}
                 aria-pressed={role === r}
                 disabled={r !== "public" && !demo}
-                title={r !== "public" && !demo ? "Действия доступны только в демо-выпуске" : undefined}
+                title={r !== "public" && !demo ? t("Действия доступны только в демо-выпуске") : undefined}
                 onClick={() => setRole(r)}
               >
-                {name}
+                {t(name)}
               </button>
             ))}
           </div>
         </div>
-        {bond && <span className="rolebar-note">Ускоренное время: 1 полугодие = {bond.periodSecs} с</span>}
+        {bond && <span className="rolebar-note">{t("Ускоренное время: 1 полугодие = {n} с", { n: bond.periodSecs })}</span>}
       </div>
     </header>
   );
@@ -292,34 +302,39 @@ function TopBar({
 // ------------------------------------------------------------------ bond header
 
 function BondHeader({ bond }: { bond: BondView }) {
+  const t = useT();
   const face = currentFace(bond);
   const debt = issuerDebt(bond);
   const holders = bond.holders.filter((h) => h.balance > 0).length;
   const defaulted = bond.events.filter((e) => ["default", "overdue"].includes(uiStatus(bond, e)));
-  const years = (bond.events.filter((e) => e.kind === KIND.COUPON).length / 2).toString();
+  const years = bond.events.filter((e) => e.kind === KIND.COUPON).length / 2;
   const matured = bond.supply === 0 && bond.subscriptionClosed;
   return (
     <section className="card bond" data-tour="bond">
       <div className="bond-id">
-        <div className="issuer">{ISSUER_NAME[bond.issuer] ?? label(bond.issuer)} · тестовый эмитент</div>
+        <div className="issuer">
+          {issuerOf(bond.issuer, t)} · {t("тестовый эмитент")}
+        </div>
         <h1>
-          Облигации {bond.couponBps / 100}% · {years} {years === "1" ? "год" : "года"}
-          {bond.events.some((e) => e.kind === KIND.PARTIAL_REDEMPTION) ? " · амортизируемые" : ""}
+          {t("Облигации {pct}%", { pct: bond.couponBps / 100 })} · {t(years === 1 ? "{n} год" : "{n} года", { n: years })}
+          {bond.events.some((e) => e.kind === KIND.PARTIAL_REDEMPTION) ? ` · ${t("амортизируемые")}` : ""}
         </h1>
         <div className="tags">
-          <span className="tag">Купон 2 раза в год</span>
-          <span className="tag">Выплаты в tKZT</span>
+          <span className="tag">{t("Купон 2 раза в год")}</span>
+          <span className="tag">{t("Выплаты в tKZT")}</span>
           <span className="tag">Solana {bond.cluster}</span>
-          {matured && <span className="tag">Выпуск погашен</span>}
-          {bond.paused && <span className="tag red">Операции приостановлены регистратором</span>}
+          {matured && <span className="tag">{t("Выпуск погашен")}</span>}
+          {bond.paused && <span className="tag red">{t("Операции приостановлены регистратором")}</span>}
           {defaulted.map((e) => (
             <span key={e.pos} className="tag red">
-              {uiStatus(bond, e) === "default" ? "Технический дефолт" : "Просрочка"} по «{eventTitle(bond, e)}»
+              {t(uiStatus(bond, e) === "default" ? "Технический дефолт по «{event}»" : "Просрочка по «{event}»", {
+                event: eventTitle(bond, e, t),
+              })}
             </span>
           ))}
         </div>
         <div className="code">
-          Код выпуска{" "}
+          {t("Код выпуска")}{" "}
           <a href={explorerAddr(bond.bond, bond.cluster)} target="_blank" rel="noopener">
             {short(bond.bond)} ↗
           </a>
@@ -327,36 +342,36 @@ function BondHeader({ bond }: { bond: BondView }) {
       </div>
       <div className="kpis">
         <div className="kpi">
-          <div className="l">Номинал облигации</div>
+          <div className="l">{t("Номинал облигации")}</div>
           <div className="v">{money(face)} ₸</div>
           <div className="s">
             {face !== bond.faceValue ? (
               <>
-                <s>{money(bond.faceValue)}</s> · погашено {Math.round((1 - face / bond.faceValue) * 100)}%
+                <s>{money(bond.faceValue)}</s> · {t("погашено {pct}%", { pct: Math.round((1 - face / bond.faceValue) * 100) })}
               </>
             ) : (
-              "без амортизации"
+              t("без амортизации")
             )}
           </div>
         </div>
         <div className="kpi">
-          <div className="l">В обращении</div>
-          <div className="v">{count(bond.supply)} шт.</div>
+          <div className="l">{t("В обращении")}</div>
+          <div className="v">{t("{n} шт.", { n: count(bond.supply) })}</div>
           <div className="s">
             {bond.issuedUnits > bond.supply && bond.subscriptionClosed
-              ? `погашено и сожжено ${count(bond.issuedUnits - bond.supply)}`
-              : `${holders} держател${holders === 1 ? "ь" : holders < 5 ? "я" : "ей"}`}
+              ? t("погашено и сожжено {n}", { n: count(bond.issuedUnits - bond.supply) })
+              : t(ruPlural(holders, "{n} держатель", "{n} держателя", "{n} держателей"), { n: holders })}
           </div>
         </div>
         <div className="kpi">
-          <div className="l">Выплачено держателям</div>
+          <div className="l">{t("Выплачено держателям")}</div>
           <div className="v" style={{ color: "var(--green)" }}>{money(totalClaimed(bond))} ₸</div>
-          <div className="s">купоны, амортизация и номинал</div>
+          <div className="s">{t("купоны, амортизация и номинал")}</div>
         </div>
         <div className={`kpi${debt ? " debt" : ""}`}>
-          <div className="l">Долг эмитента</div>
+          <div className="l">{t("Долг эмитента")}</div>
           <div className="v">{money(debt)} ₸</div>
-          <div className="s">{debt ? "срок выплаты прошёл" : "просрочек нет"}</div>
+          <div className="s">{debt ? t("срок выплаты прошёл") : t("просрочек нет")}</div>
         </div>
       </div>
     </section>
@@ -394,19 +409,20 @@ function Timeline({
   selected: number;
   onSelect: (pos: number) => void;
 }) {
+  const t = useT();
   const at = markerPosition(bond, now);
   return (
     <section className="card" data-tour="timeline">
       <div className="card-h">
-        <h2>Жизнь выпуска</h2>
-        <span className="hint">даты фиксации реестра и выплат</span>
+        <h2>{t("Жизнь выпуска")}</h2>
+        <span className="hint">{t("даты фиксации реестра и выплат")}</span>
       </div>
       <div className="tl">
         <div className="tl-track">
           <div className="tl-fill" style={{ width: `${at}%` }} />
           {at < 100 && (
             <div className="tl-now" style={{ left: `${at}%` }}>
-              <span>сейчас</span>
+              <span>{t("сейчас")}</span>
             </div>
           )}
         </div>
@@ -416,10 +432,10 @@ function Timeline({
             const debt = e.required - e.funded;
             return (
               <div key={e.pos} className={`tl-p ${st}`} aria-selected={e.pos === selected} onClick={() => onSelect(e.pos)}>
-                <div className="n">{eventTitle(bond, e)}</div>
+                <div className="n">{eventTitle(bond, e, t)}</div>
                 <div className="d">{dateTime(e.payTs)}</div>
                 <div className="a">
-                  {st === "default" || st === "overdue" ? `долг ${money(debt)} ₸` : `${money(e.amountPerUnit)} ₸`}
+                  {st === "default" || st === "overdue" ? t("долг {amount} ₸", { amount: money(debt) }) : `${money(e.amountPerUnit)} ₸`}
                 </div>
               </div>
             );
@@ -433,27 +449,29 @@ function Timeline({
 // ------------------------------------------------------------------ events table
 
 function EventsTable({ bond, selected, onSelect }: { bond: BondView; selected: number; onSelect: (pos: number) => void }) {
+  const t = useT();
   return (
     <section className="card" data-tour="events">
       <div className="card-h">
         <h2>
-          Корпоративные действия{" "}
-          <Term tip="События, которые компания обязана провести по облигациям: выплата купонов, частичное досрочное погашение (амортизация) и погашение в конце срока." />
+          {t("Корпоративные действия")}{" "}
+          <Term tip={t("События, которые компания обязана провести по облигациям: выплата купонов, частичное досрочное погашение (амортизация) и погашение в конце срока.")} />
         </h2>
-        <span className="hint">нажмите на строку — покажем расчёт</span>
+        <span className="hint">{t("нажмите на строку — покажем расчёт")}</span>
       </div>
       <div className="card-b scroll">
         <table>
           <thead>
             <tr>
-              <th>Событие</th>
+              <th>{t("Событие")}</th>
               <th>
-                Фиксация <Term tip="Дата фиксации реестра: кто владеет облигациями в этот момент, тот и получает выплату. Перевод после этой даты выплату не передаёт." />
+                {t("Фиксация")}{" "}
+                <Term tip={t("Дата фиксации реестра: кто владеет облигациями в этот момент, тот и получает выплату. Перевод после этой даты выплату не передаёт.")} />
               </th>
-              <th>Выплата</th>
-              <th className="r">На облигацию</th>
-              <th className="r">Внесено</th>
-              <th>Статус</th>
+              <th>{t("Выплата")}</th>
+              <th className="r">{t("На облигацию")}</th>
+              <th className="r">{t("Внесено")}</th>
+              <th>{t("Статус")}</th>
             </tr>
           </thead>
           <tbody>
@@ -463,22 +481,22 @@ function EventsTable({ bond, selected, onSelect }: { bond: BondView; selected: n
               return (
                 <tr key={e.pos} aria-selected={e.pos === selected} onClick={() => onSelect(e.pos)}>
                   <td>
-                    <span className="ev-name">{eventTitle(bond, e)}</span>
-                    <span className="ev-kind">{eventSubtitle(bond, e)}</span>
+                    <span className="ev-name">{eventTitle(bond, e, t)}</span>
+                    <span className="ev-kind">{eventSubtitle(bond, e, t)}</span>
                   </td>
                   <td>{dateTime(e.recordTs)}</td>
                   <td>{dateTime(e.payTs)}</td>
                   <td className="r">{money(e.amountPerUnit)} ₸</td>
                   <td className="r">
                     {money(e.funded)}
-                    <span className="of">из {money(e.required)}</span>
+                    <span className="of">{t("из {total}", { total: money(e.required) })}</span>
                     <div className={`bar ${st === "default" || st === "overdue" ? "red" : ""}`}>
                       <i style={{ width: `${pct}%` }} />
                     </div>
                   </td>
                   <td>
                     <span className={`st ${st === "default" || st === "overdue" ? "default" : st === "planned" ? "planned" : "paid"}`}>
-                      {STATUS_LABEL[st]}
+                      {t(STATUS_LABEL[st])}
                     </span>
                   </td>
                 </tr>
@@ -504,6 +522,7 @@ function CalcPanel({
   onDefault?: (actionId: number) => void;
   busy?: boolean;
 }) {
+  const t = useT();
   const st = uiStatus(bond, e);
   const recorded = e.recordTs <= bond.now;
   const rows = bond.holders
@@ -516,30 +535,32 @@ function CalcPanel({
   const total = rows.reduce((s, r) => s + r.units * e.amountPerUnit, 0);
 
   const note = (() => {
-    if (!recorded) return "Реестр на эту дату ещё не зафиксирован — расчёт предварительный, по текущим балансам.";
-    if (st === "default") return `Эмитент внёс ${money(e.funded)} из ${money(e.required)} ₸. Выплаты закрыты, пока долг не погашен полностью — частично долг не списывается.`;
-    if (st === "overdue") return "Срок выплаты прошёл, а денег внесено меньше нужного. Любой может зафиксировать технический дефолт.";
-    if (e.kind === KIND.PARTIAL_REDEMPTION) return "Эмитент внёс всю сумму в момент объявления. Номинал уменьшен, следующие купоны пересчитаны.";
-    if (e.kind === KIND.MATURITY) return "С даты фиксации переводы закрыты. Держатель сдаёт облигации — они сжигаются — и получает номинал.";
-    return "Купон начислен на номинал, который был в обращении весь купонный период.";
+    if (!recorded) return t("Реестр на эту дату ещё не зафиксирован — расчёт предварительный, по текущим балансам.");
+    if (st === "default")
+      return t("Эмитент внёс {funded} из {required} ₸. Выплаты закрыты, пока долг не погашен полностью — частично долг не списывается.", {
+        funded: money(e.funded),
+        required: money(e.required),
+      });
+    if (st === "overdue") return t("Срок выплаты прошёл, а денег внесено меньше нужного. Любой может зафиксировать технический дефолт.");
+    if (e.kind === KIND.PARTIAL_REDEMPTION) return t("Эмитент внёс всю сумму в момент объявления. Номинал уменьшен, следующие купоны пересчитаны.");
+    if (e.kind === KIND.MATURITY) return t("С даты фиксации переводы закрыты. Держатель сдаёт облигации — они сжигаются — и получает номинал.");
+    return t("Купон начислен на номинал, который был в обращении весь купонный период.");
   })();
 
   return (
     <>
-      <h3>{eventTitle(bond, e)}</h3>
-      <div className="sub">
-        фиксация {dateTime(e.recordTs)} · выплата {dateTime(e.payTs)}
-      </div>
+      <h3>{eventTitle(bond, e, t)}</h3>
+      <div className="sub">{t("фиксация {record} · выплата {pay}", { record: dateTime(e.recordTs), pay: dateTime(e.payTs) })}</div>
       <div className="formula">
-        Сумма = <b>облигаций на дату фиксации</b> × <b>{money(e.amountPerUnit)} ₸</b> на облигацию
+        {t("Сумма")} = <b>{t("облигаций на дату фиксации")}</b> × <b>{money(e.amountPerUnit)} ₸</b> {t("на облигацию")}
       </div>
-      {rows.length === 0 && <div className="empty">Держателей нет</div>}
+      {rows.length === 0 && <div className="empty">{t("Держателей нет")}</div>}
       {rows.map(({ h, units, claim }) => (
         <div className="line" key={h.owner}>
-          <div className="who">{label(h.owner)}</div>
+          <div className="who">{nameOf(h.owner, t)}</div>
           <div className="sum">{money(units * e.amountPerUnit)} ₸</div>
           <div className="eq">
-            {count(units)} обл. × {money(e.amountPerUnit)} ₸
+            {t("{n} обл.", { n: count(units) })} × {money(e.amountPerUnit)} ₸
           </div>
           <div className="tx">
             {claim ? (
@@ -547,29 +568,40 @@ function CalcPanel({
                 href={explorerAddr(claim.address, bond.cluster)}
                 target="_blank"
                 rel="noopener"
-                title={claim.status === CLAIM.BANK_CONFIRMED ? `Хеш платёжного поручения: ${claim.bankRefHash}` : "Квитанция о выплате в блокчейне"}
+                title={
+                  claim.status === CLAIM.BANK_CONFIRMED
+                    ? t("Хеш платёжного поручения: {hash}", { hash: claim.bankRefHash ?? "" })
+                    : t("Квитанция о выплате в блокчейне")
+                }
                 className={claim.status === CLAIM.BANK_REQUESTED ? "amber" : undefined}
               >
-                {claim.status === CLAIM.PAID ? (e.kind === KIND.MATURITY ? "сожжено, номинал выплачен ↗" : "на кошелёк ↗") : claim.status === CLAIM.BANK_REQUESTED ? "поручение в банк ↗" : "оплачено банком ↗"}
+                {claim.status === CLAIM.PAID
+                  ? e.kind === KIND.MATURITY
+                    ? t("сожжено, номинал выплачен")
+                    : t("на кошелёк")
+                  : claim.status === CLAIM.BANK_REQUESTED
+                    ? t("поручение в банк")
+                    : t("оплачено банком")}{" "}
+                ↗
               </a>
             ) : st === "default" || st === "overdue" ? (
-              <span className="pending">ждёт погашения долга</span>
+              <span className="pending">{t("ждёт погашения долга")}</span>
             ) : st === "paying" ? (
-              <span style={{ color: "var(--green)" }}>можно получить</span>
+              <span style={{ color: "var(--green)" }}>{t("можно получить")}</span>
             ) : (
-              <span style={{ color: "var(--muted)" }}>к выплате {dateTime(e.payTs)}</span>
+              <span style={{ color: "var(--muted)" }}>{t("к выплате {date}", { date: dateTime(e.payTs) })}</span>
             )}
           </div>
         </div>
       ))}
       <div className="total">
-        <span>Итого держателям</span>
+        <span>{t("Итого держателям")}</span>
         <span>{money(total)} ₸</span>
       </div>
       <div className={`note${st === "default" || st === "overdue" ? " red" : ""}`}>{note}</div>
       {st === "overdue" && onDefault && (
         <button className="btn danger" style={{ marginTop: 12 }} disabled={busy} onClick={() => onDefault(e.actionId)}>
-          Зафиксировать дефолт
+          {t("Зафиксировать дефолт")}
         </button>
       )}
     </>
@@ -579,6 +611,7 @@ function CalcPanel({
 // ------------------------------------------------------------------ registry at date
 
 function Registry({ bond }: { bond: BondView }) {
+  const t = useT();
   const options = useMemo(() => {
     const seen = new Map<number, EventView[]>();
     for (const e of bond.events) {
@@ -587,12 +620,12 @@ function Registry({ bond }: { bond: BondView }) {
     }
     const list = [...seen.entries()].map(([ts, evs]) => ({
       key: String(ts),
-      label: evs.map((e) => eventTitle(bond, e)).join(" + "),
+      label: evs.map((e) => eventTitle(bond, e, t)).join(" + "),
       pos: evs[0].pos as number | null,
     }));
-    list.push({ key: "now", label: "Сейчас", pos: null });
+    list.push({ key: "now", label: t("Сейчас"), pos: null });
     return list;
-  }, [bond]);
+  }, [bond, t]);
   const [key, setKey] = useState<string | null>(null);
   const idx = Math.max(0, options.findIndex((o) => o.key === key));
   const current = options[key ? idx : 0];
@@ -605,8 +638,8 @@ function Registry({ bond }: { bond: BondView }) {
   return (
     <section className="card" data-tour="registry">
       <div className="reg-head">
-        <h2>Реестр держателей на дату</h2>
-        <div className="seg" role="group" aria-label="Дата реестра">
+        <h2>{t("Реестр держателей на дату")}</h2>
+        <div className="seg" role="group" aria-label={t("Дата реестра")}>
           {options.map((o) => (
             <button key={o.key} aria-pressed={o === current} onClick={() => setKey(o.key)}>
               {o.label}
@@ -616,15 +649,15 @@ function Registry({ bond }: { bond: BondView }) {
       </div>
       <div className="card-b scroll">
         {rows.length === 0 ? (
-          <div className="empty">Все облигации погашены — держателей нет</div>
+          <div className="empty">{t("Все облигации погашены — держателей нет")}</div>
         ) : (
           <table>
             <thead>
               <tr>
-                <th>Держатель</th>
-                <th className="r">Облигаций</th>
-                <th>Доля</th>
-                <th className="r">Изменение</th>
+                <th>{t("Держатель")}</th>
+                <th className="r">{t("Облигаций")}</th>
+                <th>{t("Доля")}</th>
+                <th className="r">{t("Изменение")}</th>
               </tr>
             </thead>
             <tbody>
@@ -632,13 +665,14 @@ function Registry({ bond }: { bond: BondView }) {
                 const u = units(h, current);
                 const d = prev ? u - units(h, prev) : 0;
                 const share = (u / total) * 100;
+                const name = nameOf(h.owner, t);
                 return (
                   <tr key={h.owner}>
                     <td>
                       <div className="who-cell">
-                        <span className="avatar" style={{ background: colorFor(h.owner) }}>{label(h.owner)[0]}</span>
+                        <span className="avatar" style={{ background: colorFor(h.owner) }}>{name[0]}</span>
                         <div>
-                          <div style={{ fontWeight: 600 }}>{label(h.owner)}</div>
+                          <div style={{ fontWeight: 600 }}>{name}</div>
                           <div className="addr">{short(h.owner)}</div>
                         </div>
                       </div>
@@ -668,52 +702,66 @@ function Registry({ bond }: { bond: BondView }) {
 
 // ------------------------------------------------------------------ journal
 
-function transferContext(bond: BondView, time: number) {
+function transferContext(bond: BondView, time: number, t: T) {
   const window = bond.events.find((e) => e.recordTs <= time && time < e.payTs);
-  if (window) return { chip: "after", text: `после фиксации «${eventTitle(bond, window)}» — выплата остаётся у отправителя` };
+  if (window)
+    return { chip: "after", text: t("после фиксации «{event}» — выплата остаётся у отправителя", { event: eventTitle(bond, window, t) }) };
   const next = bond.events.find((e) => time < e.recordTs);
-  if (next) return { chip: "before", text: `до фиксации «${eventTitle(bond, next)}» — выплата перейдёт к получателю` };
+  if (next) return { chip: "before", text: t("до фиксации «{event}» — выплата перейдёт к получателю", { event: eventTitle(bond, next, t) }) };
   return null;
 }
 
-function describe(bond: BondView, op: OpView) {
+function describe(bond: BondView, op: OpView, t: T) {
   const ev = op.actionId !== undefined ? bond.events.find((e) => e.actionId === op.actionId) : undefined;
-  const evName = ev ? `«${eventTitle(bond, ev)}»` : "";
-  const who = op.actor ? label(op.actor) : "";
+  const event = ev ? `«${eventTitle(bond, ev, t)}»` : "";
+  const who = op.actor ? nameOf(op.actor, t) : "";
+  const to = nameOf(op.counterparty ?? "", t);
+  const units = count(op.units ?? 0);
   switch (op.name) {
     case "create_bond":
-      return "Эмитент создал выпуск и график выплат";
+      return t("Эмитент создал выпуск и график выплат");
     case "allow_holder":
-      return `Регистратор допустил ${who}`;
+      return t("Регистратор допустил {who}", { who });
     case "subscribe":
-      return `${who} — подписка, ${count(op.units ?? 0)} обл.`;
+      return t("{who} — подписка, {n} обл.", { who, n: units });
     case "close_subscription":
-      return "Подписка закрыта, число облигаций зафиксировано";
+      return t("Подписка закрыта, число облигаций зафиксировано");
     case "transfer_bond":
-      return `${who} → ${label(op.counterparty ?? "")}, ${count(op.units ?? 0)} обл.`;
+      return t("{who} → {to}, {n} обл.", { who, to, n: units });
     case "fund_action":
-      return `Эмитент внёс ${money(op.amount ?? 0)} ₸ по ${evName}`;
+      return t("Эмитент внёс {amount} ₸ по {event}", { amount: money(op.amount ?? 0), event });
     case "declare_partial_redemption":
-      return `Эмитент объявил амортизацию на дату ${evName} и внёс деньги`;
+      return t("Эмитент объявил амортизацию на дату {event} и внёс деньги", { event });
     case "mark_default":
-      return `Зафиксирован технический дефолт по ${evName}`;
+      return t("Зафиксирован технический дефолт по {event}", { event });
     case "claim":
-      return `${who} получил выплату по ${evName}`;
+      return t("{who} получил выплату по {event}", { who, event });
     case "redeem":
-      return `${who} сдал облигации и получил номинал`;
+      return t("{who} сдал облигации и получил номинал", { who });
     case "claim_to_bank":
-      return `Выплата по ${evName} для ${label(op.counterparty ?? "")} направлена платёжному агенту для перевода в банк`;
+      return t("Выплата по {event} для {to} направлена платёжному агенту для перевода в банк", { event, to });
     case "confirm_bank_payment":
-      return `Платёжный агент подтвердил банковский перевод ${label(op.counterparty ?? "")} по ${evName}`;
+      return t("Платёжный агент подтвердил банковский перевод {to} по {event}", { to, event });
     case "trade_dvp": {
-      const price = op.cleanPriceBps !== undefined ? ` по ${op.cleanPriceBps / 100}%` : "";
-      const accrued = op.accruedPerUnit ? ` + НКД ${money(op.accruedPerUnit)} ₸ за облигацию` : op.accruedPerUnit === 0 ? " без купона" : "";
+      const price = op.cleanPriceBps !== undefined ? t(" по {pct}%", { pct: op.cleanPriceBps / 100 }) : "";
+      const accrued = op.accruedPerUnit
+        ? t(" + НКД {amount} ₸ за облигацию", { amount: money(op.accruedPerUnit) })
+        : op.accruedPerUnit === 0
+          ? t(" без купона")
+          : "";
       const total = op.amount !== undefined ? ` = ${money(op.amount)} ₸` : "";
-      return `Сделка: ${who} продал ${label(op.counterparty ?? "")} ${count(op.units ?? 0)} обл.${price}${accrued}${total} — поставка против оплаты`;
+      return t("Сделка: {who} продал {to} {n} обл.{price}{accrued}{total} — поставка против оплаты", {
+        who,
+        to,
+        n: units,
+        price,
+        accrued,
+        total,
+      });
     }
     case "revoke_holder": {
       const h = bond.holders.find((x) => x.address === op.counterparty);
-      return `Регистратор отозвал допуск ${h ? label(h.owner) : ""}`;
+      return t("Регистратор отозвал допуск {who}", { who: h ? nameOf(h.owner, t) : "" });
     }
     default:
       return op.name;
@@ -721,34 +769,35 @@ function describe(bond: BondView, op: OpView) {
 }
 
 function Journal({ bond }: { bond: BondView }) {
+  const t = useT();
   const [all, setAll] = useState(false);
   const ops = [...bond.ops].reverse();
   const shown = all ? ops : ops.slice(0, 12);
   return (
     <section className="card" data-tour="journal">
       <div className="card-h">
-        <h2>Журнал операций</h2>
-        <span className="hint">каждая строка — транзакция в блокчейне</span>
+        <h2>{t("Журнал операций")}</h2>
+        <span className="hint">{t("каждая строка — транзакция в блокчейне")}</span>
       </div>
       <div className="card-b">
         <div className="ops">
           {shown.map((op) => {
-            const ctx = op.name === "transfer_bond" ? transferContext(bond, op.time) : null;
+            const ctx = op.name === "transfer_bond" ? transferContext(bond, op.time, t) : null;
             return (
               <div className="op" key={op.sig}>
                 <span className="when">{dateTime(op.time)}</span>
                 <span>
-                  {describe(bond, op)}
+                  {describe(bond, op, t)}
                   {ctx && (
                     <>
                       {" "}
-                      <span className={`chip ${ctx.chip}`}>{ctx.chip === "after" ? "после фиксации" : "до фиксации"}</span>{" "}
+                      <span className={`chip ${ctx.chip}`}>{ctx.chip === "after" ? t("после фиксации") : t("до фиксации")}</span>{" "}
                       <span style={{ color: "var(--muted)", fontSize: 12 }}>{ctx.text}</span>
                     </>
                   )}
                 </span>
                 <a href={explorerTx(op.sig, bond.cluster)} target="_blank" rel="noopener">
-                  транзакция ↗
+                  {t("транзакция")} ↗
                 </a>
               </div>
             );
@@ -757,7 +806,7 @@ function Journal({ bond }: { bond: BondView }) {
         {ops.length > 12 && (
           <div style={{ marginTop: 12 }}>
             <button className="linkbtn" onClick={() => setAll(!all)}>
-              {all ? "Свернуть" : `Показать все ${ops.length}`}
+              {all ? t("Свернуть") : t("Показать все {n}", { n: ops.length })}
             </button>
           </div>
         )}
@@ -779,10 +828,11 @@ function NextStepBar({
   demo: boolean;
   onGo: (role: Role, who?: "aigerim" | "bolat" | "fund") => void;
 }) {
-  const step = nextStep(bond, now);
+  const t = useT();
+  const step = nextStep(bond, now, t);
   return (
     <div className={`next-step ${step.tone}`} data-tour="next-step" role="status">
-      <span className="next-label">Сейчас</span>
+      <span className="next-label">{t("Сейчас")}</span>
       <span className="next-text">
         {step.text}
         {step.until && step.until > now && <b className="next-timer"> {mmss(step.until - now)}</b>}
@@ -795,4 +845,3 @@ function NextStepBar({
     </div>
   );
 }
-

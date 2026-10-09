@@ -17,29 +17,29 @@ Built for the Superteam Kazakhstan × KASE side track [*Corporate Actions on Blo
 
 ## Try it in three minutes
 
-1. Open **https://pritok-sol.vercel.app** and press **Новый демо-выпуск** (new demo issue). In about 10 seconds a bond is created, three investors are admitted, and 1 000 bonds of 100 000 ₸ at 16% are placed among them. Time is accelerated: one half-year lasts four minutes, so the whole two-year issue plays out in about 17 minutes.
-2. Follow the **Сейчас** ("now") bar at the top. It reads the bond's state and offers the next step with a button that switches to the right role.
-3. **Инвестор** (investor): transfer or sell bonds before the record date and watch the coupon follow the bond. Sell at a clean price and see the accrued interest the program adds.
-4. **Эмитент** (issuer): fund a coupon, or fund only 75% to trigger a public default, then pay the rest to cure it. Declare a partial redemption on a future coupon date.
-5. **Инвестор**: claim a payout to the wallet, or choose **В банк** (to the bank).
-6. **Регистратор** (registrar / paying agent): confirm the bank transfer with a payment reference.
+1. Open **https://pritok-sol.vercel.app** and press **New demo issue**. The interface is in English by default; **KZ · EN · RU** in the header switches to Kazakh or Russian (or add `?lang=kk|en|ru` to a link). In about 10 seconds a bond is created, three investors are admitted, and 1 000 bonds of 100 000 ₸ at 16% are placed among them. Time is accelerated: one half-year lasts four minutes, so the whole two-year issue plays out in about 17 minutes.
+2. Follow the **Now** bar at the top. It reads the bond's state and offers the next step with a button that switches to the right role.
+3. **Investor**: transfer or sell bonds before the record date and watch the coupon follow the bond. Sell at a clean price and see the accrued interest the program adds.
+4. **Issuer**: fund a coupon, or fund only 75% to trigger a public default, then pay the rest to cure it. Declare a partial redemption on a future coupon date.
+5. **Investor**: claim a payout to the wallet, or choose **To bank**.
+6. **Registrar** (registrar and paying agent): confirm the bank transfer with a payment reference.
 7. At maturity the investor redeems: the bonds are burned, and principal plus the last coupon are paid in one transaction.
-8. **Портфель** (portfolio) shows the investor's side across all issues: invested, received, what is due now, a payout calendar.
+8. **Portfolio** shows the investor's side across all issues: invested, received, what is due now, a payout calendar.
 
-**Как это работает** replays a 9-step tour of the screen. A **?** next to a term explains it in plain language.
+**How it works** replays a 9-step tour of the screen. A **?** next to a term explains it in plain language.
 
 ## Coverage of the track requirements
 
 | Requirement | How PRITOK does it | Where to see it |
 |---|---|---|
 | Test tokenized instrument with holder registry | Token-2022 bond mint, one holder record per wallet per bond, admission by the registrar | Registry at date, registrar screen |
-| **Coupon payment**: holders on the record date | Record-date balances frozen onchain at every balance change (see [record dates](#record-dates)) | *Реестр держателей на дату* |
+| **Coupon payment**: holders on the record date | Record-date balances frozen onchain at every balance change (see [record dates](#record-dates)) | *Holder register as of* |
 | Coupon: calculate each investor's entitlement | `units at record date × coupon per bond`, per holder | Calculation panel of any event |
 | Coupon: execute onchain or show a settlement flow | Both: stablecoin to the wallet, or to a paying agent with bank confirmation | Investor and registrar screens |
 | **Redemption**: identify holders, principal due | Transfers close at the maturity record date; principal on the current face after amortization | Maturity event |
-| Redemption: settle and retire tokens | `redeem` burns the bonds and pays principal + last coupon atomically | "погашено и сожжено N", journal |
+| Redemption: settle and retire tokens | `redeem` burns the bonds and pays principal + last coupon atomically | "N redeemed and burned", journal |
 | One additional corporate action | **Partial redemption** (amortization), plus secondary **DvP trade** with accrued interest and **default & cure** | Issuer screen, sale form |
-| Verifiable onchain record | Receipt account per payout, every operation decoded in the journal with an explorer link | Journal, "выплачено ↗" links |
+| Verifiable onchain record | Receipt account per payout, every operation decoded in the journal with an explorer link | Journal, "to wallet ↗" receipt links |
 | Clear line between implemented and simulated | [Table below](#implemented-vs-simulated) | — |
 
 ## Architecture

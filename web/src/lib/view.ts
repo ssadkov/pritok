@@ -1,6 +1,8 @@
 // Plain JSON view of a bond, shared by the API route and the UI. Amounts are in
 // payment-token base units (tKZT has 2 decimals), times are chain unix seconds.
 
+import { ruT, type T } from "./i18n-core";
+
 export const KIND = { COUPON: 0, PARTIAL_REDEMPTION: 1, MATURITY: 2 } as const;
 export const STATUS = { SCHEDULED: 0, FUNDED: 1, DEFAULTED: 2 } as const;
 export const MODE = { ONCHAIN: 0, BANK: 1 } as const;
@@ -114,20 +116,20 @@ export function dateTime(ts: number) {
   return `${p(d.getDate())}.${p(d.getMonth() + 1)} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
 }
 
-export function eventTitle(bond: BondView, e: EventView) {
+export function eventTitle(bond: BondView, e: EventView, t: T = ruT) {
   if (e.kind === KIND.COUPON) {
     const n = bond.events.filter((x) => x.kind === KIND.COUPON && x.pos <= e.pos).length;
-    return `Купон ${n}`;
+    return t("Купон {n}", { n });
   }
-  if (e.kind === KIND.PARTIAL_REDEMPTION) return `Амортизация ${e.factorBpsApplied / 100}%`;
-  return "Погашение";
+  if (e.kind === KIND.PARTIAL_REDEMPTION) return t("Амортизация {pct}%", { pct: e.factorBpsApplied / 100 });
+  return t("Погашение");
 }
 
-export function eventSubtitle(bond: BondView, e: EventView) {
-  const face = (bond.faceValue * e.factorBpsApplied) / 10_000;
-  if (e.kind === KIND.COUPON) return `на номинал ${money(face)}`;
-  if (e.kind === KIND.PARTIAL_REDEMPTION) return "частичное погашение";
-  return `номинал ${money(face)}`;
+export function eventSubtitle(bond: BondView, e: EventView, t: T = ruT) {
+  const face = money((bond.faceValue * e.factorBpsApplied) / 10_000);
+  if (e.kind === KIND.COUPON) return t("на номинал {face}", { face });
+  if (e.kind === KIND.PARTIAL_REDEMPTION) return t("частичное погашение");
+  return t("номинал {face}", { face });
 }
 
 export type UiStatus = "paid" | "paying" | "funded" | "overdue" | "default" | "planned";

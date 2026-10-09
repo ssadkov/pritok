@@ -1,3 +1,5 @@
+import type { T } from "./i18n-core";
+
 // Display names for the devnet demo wallets (keys live in client/.keys).
 // Unknown addresses are shown shortened.
 export const LABELS: Record<string, string> = {
@@ -16,6 +18,10 @@ export const DEFAULT_BOND =
   process.env.NEXT_PUBLIC_DEFAULT_BOND ?? "2dwYhfHkJCpuwrhYBCvZpLYEzrbkVHzW2tyjzMNXu8RG";
 
 export const label = (addr: string) => LABELS[addr] ?? `${addr.slice(0, 4)}…${addr.slice(-4)}`;
+
+/** Display name in the current language; unknown addresses stay shortened. */
+export const nameOf = (addr: string, t: T) => (LABELS[addr] ? t(LABELS[addr]) : label(addr));
+export const issuerOf = (addr: string, t: T) => (ISSUER_NAME[addr] ? t(ISSUER_NAME[addr]) : nameOf(addr, t));
 
 const COLORS = ["#028a29", "#45464f", "#1e212b", "#3cbd0d", "#6b6d76"];
 export const colorFor = (addr: string) =>

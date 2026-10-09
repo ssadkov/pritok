@@ -1,9 +1,11 @@
 "use client";
 
 import { useState } from "react";
+import { useT } from "@/lib/i18n";
 
 /** Starts a fresh demo issue (created, admitted and placed on the server) and opens it. */
 export function NewBondButton({ className = "btn", label = "Новый демо-выпуск" }: { className?: string; label?: string }) {
+  const t = useT();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const start = async () => {
@@ -16,14 +18,14 @@ export function NewBondButton({ className = "btn", label = "Новый демо-
       const role = new URLSearchParams(window.location.search).get("as");
       window.location.assign(`/bond/${data.bond}${role ? `?as=${role}` : ""}`);
     } catch (e) {
-      setError(String((e as Error).message ?? e));
+      setError(t(String((e as Error).message ?? e)));
       setBusy(false);
     }
   };
   return (
     <span className="new-bond">
-      <button className={className} disabled={busy} onClick={start} title="Создать выпуск, допустить инвесторов и разместить облигации. 1 полугодие = 4 минуты">
-        {busy ? "Создаём выпуск… ~20 с" : label}
+      <button className={className} disabled={busy} onClick={start} title={t("Создать выпуск, допустить инвесторов и разместить облигации. 1 полугодие = 4 минуты")}>
+        {busy ? t("Создаём выпуск… ~20 с") : t(label)}
       </button>
       {error && <span className="red small">{error}</span>}
     </span>

@@ -1,5 +1,6 @@
 // Investor-side numbers from onchain data: what was invested, what came back, what is ahead.
 import type { PortfolioView, PositionView } from "./chain";
+import { ruT, type T } from "./i18n-core";
 import { CLAIM, KIND, STATUS, eventTitle, type BondView, type EventView } from "./view";
 
 /** eventTitle and friends take a BondView; a position has everything they read. */
@@ -26,7 +27,7 @@ function faceNow(p: PositionView, now: number) {
   return Math.floor((p.faceValue * factor) / 10_000);
 }
 
-export function calendar(pf: PortfolioView): CalendarEntry[] {
+export function calendar(pf: PortfolioView, t: T = ruT): CalendarEntry[] {
   const out: CalendarEntry[] = [];
   for (const p of pf.positions) {
     for (const e of p.events) {
@@ -43,7 +44,7 @@ export function calendar(pf: PortfolioView): CalendarEntry[] {
         bond: p.bond,
         position: p,
         event: e,
-        title: eventTitle(asBond(p), e),
+        title: eventTitle(asBond(p), e, t),
         ts: e.payTs,
         units: claim ? claim.units : units,
         amount: claim ? claim.amount : units * e.amountPerUnit,

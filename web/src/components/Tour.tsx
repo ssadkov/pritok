@@ -2,10 +2,12 @@
 
 import { useEffect } from "react";
 import "driver.js/dist/driver.css";
+import type { T } from "@/lib/i18n-core";
 
 const SEEN_KEY = "pritok-tour-v1";
 
 // The tour tells the bond's story in order; each step points at a data-tour element.
+// Texts are Russian keys, translated when the tour starts.
 const STEPS: { el: string; title: string; text: string }[] = [
   {
     el: "next-step",
@@ -54,19 +56,19 @@ const STEPS: { el: string; title: string; text: string }[] = [
   },
 ];
 
-export async function startTour() {
+export async function startTour(t: T) {
   const { driver } = await import("driver.js");
   const steps = STEPS.filter((s) => document.querySelector(`[data-tour="${s.el}"]`)).map((s) => ({
     element: `[data-tour="${s.el}"]`,
-    popover: { title: s.title, description: s.text },
+    popover: { title: t(s.title), description: t(s.text) },
   }));
   driver({
     steps,
     showProgress: true,
-    progressText: "{{current}} из {{total}}",
-    nextBtnText: "Далее →",
-    prevBtnText: "← Назад",
-    doneBtnText: "Понятно",
+    progressText: t("{{current}} из {{total}}"),
+    nextBtnText: t("Далее →"),
+    prevBtnText: t("← Назад"),
+    doneBtnText: t("Понятно"),
     popoverClass: "pritok-tour",
     smoothScroll: true,
     onDestroyed: () => {
@@ -78,7 +80,7 @@ export async function startTour() {
 }
 
 /** Starts the tour once per browser, after the bond has rendered. */
-export function useFirstVisitTour(ready: boolean) {
+export function useFirstVisitTour(ready: boolean, t: T) {
   useEffect(() => {
     if (!ready) return;
     let seen = true;
@@ -86,8 +88,10 @@ export function useFirstVisitTour(ready: boolean) {
       seen = localStorage.getItem(SEEN_KEY) === "1";
     } catch {}
     if (seen || new URLSearchParams(window.location.search).has("as")) return;
-    const t = setTimeout(startTour, 800);
-    return () => clearTimeout(t);
+    const timer = setTimeout(() => startTour(t), 800);
+    return () => clearTimeout(timer);
+    // Start once per visit; a language switch later must not restart it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready]);
 }
 

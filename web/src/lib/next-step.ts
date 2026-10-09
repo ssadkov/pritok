@@ -1,5 +1,6 @@
 // "What can be done now": reads the bond state and suggests the next meaningful action,
 // so a visitor always knows what the issue is waiting for.
+import { ruT, type T } from "./i18n-core";
 import { CLAIM, KIND, STATUS, eventTitle, money, uiStatus, type BondView } from "./view";
 
 export type StepRole = "issuer" | "operator" | "investor";
@@ -18,25 +19,25 @@ function investorKey(bond: BondView, owner: string) {
   return bond.demo?.investors?.find((i) => i.address === owner)?.key ?? WHO[0];
 }
 
-export function nextStep(bond: BondView, now: number): NextStep {
-  const title = (e: (typeof bond.events)[number]) => `«${eventTitle(bond, e)}»`;
+export function nextStep(bond: BondView, now: number, t: T = ruT): NextStep {
+  const title = (e: (typeof bond.events)[number]) => `«${eventTitle(bond, e, t)}»`;
 
   if (bond.supply === 0 && bond.subscriptionClosed) {
-    return { tone: "done", text: "Выпуск погашен: все облигации сданы, все выплаты проведены." };
+    return { tone: "done", text: t("Выпуск погашен: все облигации сданы, все выплаты проведены.") };
   }
   if (bond.paused) {
     return {
       tone: "alert",
-      text: "Регистратор приостановил подписку и переводы. Уже возникшие выплаты при этом работают.",
-      go: { role: "operator", label: "Кабинет регистратора" },
+      text: t("Регистратор приостановил подписку и переводы. Уже возникшие выплаты при этом работают."),
+      go: { role: "operator", label: t("Кабинет регистратора") },
     };
   }
   if (!bond.subscriptionClosed && now < bond.subscriptionEndTs) {
     return {
       tone: "info",
-      text: "Идёт размещение: инвесторы подписываются на облигации, деньги сразу получает эмитент.",
+      text: t("Идёт размещение: инвесторы подписываются на облигации, деньги сразу получает эмитент."),
       until: bond.subscriptionEndTs,
-      go: { role: "investor", label: "Подписаться как инвестор" },
+      go: { role: "investor", label: t("Подписаться как инвестор") },
     };
   }
 
@@ -48,9 +49,15 @@ export function nextStep(bond: BondView, now: number): NextStep {
       tone: "alert",
       text:
         st === "overdue"
-          ? `Срок выплаты ${title(debt)} прошёл, а эмитент внёс ${money(debt.funded)} из ${money(debt.required)} ₸. Любой может зафиксировать технический дефолт — кнопка в расчёте события.`
-          : `Технический дефолт по ${title(debt)}: долг ${money(debt.required - debt.funded)} ₸. Выплаты откроются, когда эмитент внесёт всю сумму.`,
-      go: { role: "issuer", label: "Погасить долг как эмитент" },
+          ? t(
+              "Срок выплаты {event} прошёл, а эмитент внёс {funded} из {required} ₸. Любой может зафиксировать технический дефолт — кнопка в расчёте события.",
+              { event: title(debt), funded: money(debt.funded), required: money(debt.required) },
+            )
+          : t("Технический дефолт по {event}: долг {debt} ₸. Выплаты откроются, когда эмитент внесёт всю сумму.", {
+              event: title(debt),
+              debt: money(debt.required - debt.funded),
+            }),
+      go: { role: "issuer", label: t("Погасить долг как эмитент") },
     };
   }
 
@@ -58,8 +65,13 @@ export function nextStep(bond: BondView, now: number): NextStep {
   if (bankQueue.length) {
     return {
       tone: "action",
-      text: `${bankQueue.length === 1 ? "Одна выплата ждёт" : `${bankQueue.length} выплаты ждут`} банковского перевода: деньги уже у платёжного агента, осталось подтвердить платёжку.`,
-      go: { role: "operator", label: "Подтвердить как платёжный агент" },
+      text:
+        bankQueue.length === 1
+          ? t("Одна выплата ждёт банковского перевода: деньги уже у платёжного агента, осталось подтвердить платёжку.")
+          : t("{n} выплаты ждут банковского перевода: деньги уже у платёжного агента, осталось подтвердить платёжку.", {
+              n: bankQueue.length,
+            }),
+      go: { role: "operator", label: t("Подтвердить как платёжный агент") },
     };
   }
 
@@ -72,8 +84,8 @@ export function nextStep(bond: BondView, now: number): NextStep {
     if (waiting) {
       return {
         tone: "action",
-        text: `Выплату по ${title(e)} можно получить — на кошелёк или через банк.`,
-        go: { role: "investor", who: investorKey(bond, waiting.owner), label: "Получить как инвестор" },
+        text: t("Выплату по {event} можно получить — на кошелёк или через банк.", { event: title(e) }),
+        go: { role: "investor", who: investorKey(bond, waiting.owner), label: t("Получить как инвестор") },
       };
     }
   }
@@ -83,20 +95,23 @@ export function nextStep(bond: BondView, now: number): NextStep {
     const holder = bond.holders.find((h) => h.balance > 0);
     return {
       tone: "action",
-      text: "Срок погашения наступил: держатели сдают облигации (они сжигаются) и получают номинал вместе с последним купоном.",
-      go: { role: "investor", who: holder ? investorKey(bond, holder.owner) : undefined, label: "Погасить как инвестор" },
+      text: t("Срок погашения наступил: держатели сдают облигации (они сжигаются) и получают номинал вместе с последним купоном."),
+      go: { role: "investor", who: holder ? investorKey(bond, holder.owner) : undefined, label: t("Погасить как инвестор") },
     };
   }
 
   // Nothing to collect yet: the next payment needs money from the issuer.
   const nextPay = bond.events.find((e) => e.payTs > now);
   if (nextPay && nextPay.funded < nextPay.required) {
-    const recorded = nextPay.recordTs <= now;
+    const vars = { event: title(nextPay), left: money(nextPay.required - nextPay.funded) };
     return {
       tone: "action",
-      text: `${recorded ? "Реестр для" : "Скоро фиксация реестра для"} ${title(nextPay)}${recorded ? " зафиксирован" : ""}. Эмитент ещё не внёс ${money(nextPay.required - nextPay.funded)} ₸ — можно внести всё или 75%, чтобы увидеть дефолт.`,
+      text:
+        nextPay.recordTs <= now
+          ? t("Реестр для {event} зафиксирован. Эмитент ещё не внёс {left} ₸ — можно внести всё или 75%, чтобы увидеть дефолт.", vars)
+          : t("Скоро фиксация реестра для {event}. Эмитент ещё не внёс {left} ₸ — можно внести всё или 75%, чтобы увидеть дефолт.", vars),
       until: nextPay.payTs,
-      go: { role: "issuer", label: "Внести деньги как эмитент" },
+      go: { role: "issuer", label: t("Внести деньги как эмитент") },
     };
   }
 
@@ -104,11 +119,13 @@ export function nextStep(bond: BondView, now: number): NextStep {
   if (nextRecord) {
     return {
       tone: "info",
-      text: `До фиксации реестра для ${title(nextRecord)}: перевод сейчас передаст выплату получателю, после фиксации — нет.`,
+      text: t("До фиксации реестра для {event}: перевод сейчас передаст выплату получателю, после фиксации — нет.", {
+        event: title(nextRecord),
+      }),
       until: nextRecord.recordTs,
-      go: { role: "investor", label: "Перевести как инвестор" },
+      go: { role: "investor", label: t("Перевести как инвестор") },
     };
   }
-  if (nextPay) return { tone: "info", text: `Всё профинансировано, ждём даты выплаты ${title(nextPay)}.`, until: nextPay.payTs };
-  return { tone: "info", text: "Событий впереди нет." };
+  if (nextPay) return { tone: "info", text: t("Всё профинансировано, ждём даты выплаты {event}.", { event: title(nextPay) }), until: nextPay.payTs };
+  return { tone: "info", text: t("Событий впереди нет.") };
 }
