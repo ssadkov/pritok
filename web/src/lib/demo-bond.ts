@@ -9,13 +9,38 @@ import { INVESTORS, demoContext } from "./demo-signer";
 // One "half-year" = 4 minutes: the whole 2-year issue plays out in about 17 minutes.
 const PERIOD = 240;
 const RECORD_OFFSET = 30;
-const FACE = 10_000_000n; // 100 000.00 tKZT
-const PLACEMENT = { aigerim: 300, bolat: 200, fund: 500 } as const;
 const MIN_SOL = 0.03 * LAMPORTS_PER_SOL;
 const TOP_UP_SOL = 0.1 * LAMPORTS_PER_SOL;
-const INVESTOR_TKZT = FACE * 1_000n;
-const ISSUER_TKZT = FACE * 2_000n;
 const COOLDOWN_MS = 60_000;
+
+/** Issue terms the issuer sets in the form; amounts in whole tenge. */
+export interface IssueTerms {
+  faceValue: number;
+  couponPct: number;
+  coupons: number;
+  units: number;
+}
+
+export const DEFAULT_TERMS: IssueTerms = { faceValue: 100_000, couponPct: 16, coupons: 4, units: 1_000 };
+
+/** Validates form input; the program enforces the same bounds where it matters. */
+export function parseTerms(raw: Partial<IssueTerms> | undefined): IssueTerms {
+  const t = { ...DEFAULT_TERMS, ...(raw ?? {}) };
+  const ok =
+    Number.isInteger(t.faceValue) && t.faceValue >= 1_000 && t.faceValue <= 10_000_000 &&
+    Number.isFinite(t.couponPct) && t.couponPct >= 0.1 && t.couponPct <= 50 && Math.round(t.couponPct * 100) === t.couponPct * 100 &&
+    Number.isInteger(t.coupons) && t.coupons >= 1 && t.coupons <= 4 &&
+    Number.isInteger(t.units) && t.units >= 10 && t.units <= 100_000;
+  if (!ok) throw new Error("Проверьте условия: номинал 1 000–10 000 000 ₸, ставка 0,1–50%, от 1 до 4 купонов, 10–100 000 облигаций");
+  return t;
+}
+
+/** The demo always places the whole issue among three investors: 30% / 20% / 50%. */
+function placement(units: number): Record<(typeof INVESTORS)[number], number> {
+  const aigerim = Math.floor(units * 0.3);
+  const bolat = Math.floor(units * 0.2);
+  return { aigerim, bolat, fund: units - aigerim - bolat };
+}
 
 function program() {
   const { conn, keys } = demoContext();
@@ -37,7 +62,7 @@ async function chainTime() {
 }
 
 /** Keeps demo wallets able to pay rent and fees, and to buy and pay out bonds. */
-async function topUp(tkzt: PublicKey) {
+async function topUp(tkzt: PublicKey, issueTiyn: bigint) {
   const { conn, keys } = demoContext();
   const actors = [keys.issuer, keys.operator, ...INVESTORS.map((i) => keys[i])];
   const tx = new Transaction();
@@ -49,8 +74,10 @@ async function topUp(tkzt: PublicKey) {
 
   // The registrar is the tKZT faucet (mint authority) in the demo.
   const targets: [PublicKey, bigint][] = [
-    [keys.issuer.publicKey, ISSUER_TKZT],
-    ...INVESTORS.map((i): [PublicKey, bigint] => [keys[i].publicKey, INVESTOR_TKZT]),
+    // The issuer pays coupons (at most 100% of the issue: 50% a year for 2 years) and principal.
+    [keys.issuer.publicKey, issueTiyn * 2n],
+    // Each investor can buy the whole issue, so trades between them always have cover.
+    ...INVESTORS.map((i): [PublicKey, bigint] => [keys[i].publicKey, issueTiyn]),
     [keys.operator.publicKey, 0n],
   ];
   await Promise.all(
@@ -64,30 +91,33 @@ async function topUp(tkzt: PublicKey) {
 let lastCreated: { at: number; bond: string } | null = null;
 
 /** Creates, admits and places a fresh demo bond; returns its address. */
-export async function createDemoBond(): Promise<{ bond: string; reused: boolean }> {
+export async function createDemoBond(raw?: Partial<IssueTerms>): Promise<{ bond: string; reused: boolean }> {
+  const terms = parseTerms(raw);
   if (lastCreated && Date.now() - lastCreated.at < COOLDOWN_MS) return { bond: lastCreated.bond, reused: true };
   const { keys } = demoContext();
   const p = program();
   const config = await p.account.config.fetch(configPda());
   const tkzt = config.paymentMints[0];
-  await topUp(tkzt);
+  const face = BigInt(terms.faceValue) * 100n; // tiyn
+  await topUp(tkzt, face * BigInt(terms.units));
 
   const now = await chainTime();
   const start = now + 10;
   const c = new BondClient(p, keys.issuer.publicKey, BigInt(now), tkzt);
   await c.createBond(keys.issuer, {
     bondId: BigInt(now),
-    faceValue: FACE,
-    couponBps: 1_600,
+    faceValue: face,
+    couponBps: Math.round(terms.couponPct * 100),
     periodSecs: PERIOD,
     startTs: start,
     recordOffsetSecs: RECORD_OFFSET,
-    numPeriods: 4,
+    numPeriods: terms.coupons,
     subscriptionEndTs: start + 60,
   });
   lastCreated = { at: Date.now(), bond: c.bond.toBase58() };
   await Promise.all(INVESTORS.map((i) => c.allowHolder(keys.operator, keys[i].publicKey)));
-  await Promise.all(INVESTORS.map((i) => c.subscribe(keys[i], PLACEMENT[i])));
+  const shares = placement(terms.units);
+  await Promise.all(INVESTORS.filter((i) => shares[i] > 0).map((i) => c.subscribe(keys[i], shares[i])));
 
   // Sanity check: placement landed.
   const vaultOk = await getAccount(demoContext().conn, getAssociatedTokenAddressSync(tkzt, c.bond, true)).then(() => true, () => false);

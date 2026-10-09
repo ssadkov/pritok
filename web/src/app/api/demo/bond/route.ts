@@ -6,10 +6,11 @@ export const dynamic = "force-dynamic";
 // Bond creation, admission and placement take several devnet round trips.
 export const maxDuration = 60;
 
-export async function POST() {
+export async function POST(req: Request) {
   if (!demoEnabled()) return NextResponse.json({ error: "Демо-подписание выключено" }, { status: 403 });
   try {
-    return NextResponse.json(await createDemoBond());
+    const terms = await req.json().catch(() => undefined);
+    return NextResponse.json(await createDemoBond(terms));
   } catch (e) {
     return NextResponse.json({ error: explain(e) }, { status: 500 });
   }

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { nameOf } from "@/lib/demo";
 import { useT } from "@/lib/i18n";
+import { NewBondButton } from "./NewBondButton";
 import { CorporateActions } from "./OperatorConsole";
 import { Term } from "./Tour";
 import {
@@ -111,6 +112,7 @@ export function IssuerPanel({ bond, a }: { bond: BondView; a: Act }) {
         <span className="hint">
           {nameOf(bond.issuer, t)} · {t("на счёте {amount} tKZT", { amount: money(bond.demo?.issuerTkzt ?? 0) })}
         </span>
+        <NewBondButton className="btn ghost small-btn" label="Создать новый выпуск" />
       </div>
       <div className="card-b panel-grid">
         <div>
@@ -198,7 +200,7 @@ export function IssuerPanel({ bond, a }: { bond: BondView; a: Act }) {
                 </label>
               </div>
               <p className="muted small">
-                {t("Нужно внести: {amount} ₸", { amount: money(((bond.faceValue * pct * 100) / 10_000) * bond.issuedUnits) })}
+                {t("Нужно внести: {amount} ₸", { amount: money(((bond.faceValue * pct * 100) / 10_000) * (bond.issuedUnits || bond.supply)) })}
               </p>
               <Btn
                 a={a}

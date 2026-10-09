@@ -17,7 +17,7 @@ Built for the Superteam Kazakhstan × KASE side track [*Corporate Actions on Blo
 
 ## Try it in three minutes
 
-1. Open **https://pritok-sol.vercel.app** and press **New demo issue**. The interface is in English by default; **KZ · EN · RU** in the header switches to Kazakh or Russian (or add `?lang=kk|en|ru` to a link). In about 10 seconds a bond is created, three investors are admitted, and 1 000 bonds of 100 000 ₸ at 16% are placed among them. Time is accelerated: one half-year lasts four minutes, so the whole two-year issue plays out in about 17 minutes.
+1. Open **https://pritok-sol.vercel.app** and press **New demo issue**. The issuer's form sets face value, coupon rate, term (one to four semi-annual coupons) and issue size; the defaults create the standard demo issue in one click. The interface is in English by default; **KZ · EN · RU** in the header switches to Kazakh or Russian (or add `?lang=kk|en|ru` to a link). In about 10 seconds the bond is created, three investors are admitted, and the issue is placed among them 30% / 20% / 50% (by default 1 000 bonds of 100 000 ₸ at 16%). Time is accelerated: one half-year lasts four minutes, so the whole two-year issue plays out in about 17 minutes.
 2. Follow the **Now** bar at the top. It reads the bond's state and offers the next step with a button that switches to the right role.
 3. **Investor**: transfer or sell bonds before the record date and watch the coupon follow the bond. Sell at a clean price and see the accrued interest the program adds.
 4. **Issuer**: fund a coupon, or fund only 75% to trigger a public default, then pay the rest to cure it. Declare a partial redemption on a future coupon date.
@@ -85,7 +85,7 @@ flowchart LR
 | Who | Instructions |
 |---|---|
 | Operator | `init_config`, `allow_holder`, `revoke_holder`, `set_paused`, `pay_holder`, `redeem_for`, `claim_to_bank` (for a holder), `confirm_bank_payment` |
-| Issuer | `create_bond`, `fund_action`, `declare_partial_redemption` |
+| Issuer | `create_bond` (from the issuer's form), `fund_action`, `declare_partial_redemption` |
 | Holder | `subscribe`, `transfer_bond`, `trade_dvp` (with the counterparty), `claim`, `claim_to_bank`, `redeem` |
 | Anyone | `close_subscription`, `mark_default` |
 

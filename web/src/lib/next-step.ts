@@ -16,7 +16,10 @@ export interface NextStep {
 export function nextStep(bond: BondView, now: number, t: T = ruT): NextStep {
   const title = (e: (typeof bond.events)[number]) => `«${eventTitle(bond, e, t)}»`;
 
-  if (bond.supply === 0 && bond.subscriptionClosed) {
+  const unpaid = (e: (typeof bond.events)[number]) =>
+    bond.holders.filter((h) => (h.unitsAt[e.pos] ?? 0) > 0 && !bond.claims.some((c) => c.owner === h.owner && c.actionId === e.actionId));
+  const leftToPay = bond.events.some((e) => e.kind !== KIND.MATURITY && e.status === STATUS.FUNDED && now >= e.payTs && unpaid(e).length);
+  if (bond.supply === 0 && bond.subscriptionClosed && !leftToPay) {
     return { tone: "done", text: t("Выпуск погашен: все облигации сданы, все выплаты проведены.") };
   }
   if (bond.paused) {
@@ -72,10 +75,7 @@ export function nextStep(bond: BondView, now: number, t: T = ruT): NextStep {
   // Money is in the vault and the date has come: the operator executes the payout for everyone.
   for (const e of bond.events) {
     if (e.kind === KIND.MATURITY || e.status !== STATUS.FUNDED || now < e.payTs) continue;
-    const waiting = bond.holders.filter(
-      (h) => (h.unitsAt[e.pos] ?? 0) > 0 && !bond.claims.some((c) => c.owner === h.owner && c.actionId === e.actionId),
-    );
-    if (waiting.length) {
+    if (unpaid(e).length) {
       return {
         tone: "action",
         text: t("Выплата по {event} готова к исполнению: оператор проводит её всем держателям одной командой. Держатель может и сам получить её раньше — на кошелёк или через банк.", {
