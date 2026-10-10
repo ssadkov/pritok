@@ -5,6 +5,7 @@ import { nextStep } from "@/lib/next-step";
 import { LangSwitch, useT } from "@/lib/i18n";
 import { ruPlural, type T } from "@/lib/i18n-core";
 import { NewBondButton } from "./NewBondButton";
+import { Brand } from "./Brand";
 import { executionRows } from "./OperatorConsole";
 import { Term, startTour, useFirstVisitTour } from "./Tour";
 import { InvestorPanel, IssuerPanel, OperatorPanel, Toast, useAct, type Role } from "./RolePanels";
@@ -240,10 +241,7 @@ function TopBar({
   return (
     <header className="top">
       <div className="wrap">
-        <a className="brand" href="/" style={{ textDecoration: "none" }}>
-          <span className="brand-mark" />
-          PRITOK<small>{t("реестр и выплаты")}</small>
-        </a>
+        <Brand subtitle={t("реестр и выплаты")} />
         <a className="seg-link" href="/bonds" data-tour="bonds">
           {t("Все выпуски")}
         </a>

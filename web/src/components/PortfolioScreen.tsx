@@ -7,6 +7,7 @@ import { LangSwitch, useT } from "@/lib/i18n";
 import type { T } from "@/lib/i18n-core";
 import { calendar, summarize, type CalendarEntry, type EntryState } from "@/lib/portfolio";
 import { count, dateTime, explorerAddr, explorerTx, money, short } from "@/lib/view";
+import { Brand } from "./Brand";
 
 const STATE: Record<EntryState, [string, string]> = {
   received: ["Получено", "paid"],
@@ -110,10 +111,7 @@ export function PortfolioScreen({ owner, demo }: { owner: string; demo: boolean 
     <>
       <header className="top">
         <div className="wrap">
-          <a className="brand" href="/" style={{ textDecoration: "none" }}>
-            <span className="brand-mark" />
-            PRITOK<small>{t("реестр и выплаты")}</small>
-          </a>
+          <Brand subtitle={t("реестр и выплаты")} />
           <a className="seg-link" href="/bonds">
             {t("Все выпуски")}
           </a>

@@ -5,8 +5,9 @@ import { LangProvider } from "@/lib/i18n";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "PRITOK — bond registry and payouts",
+  title: "PriTok — bond registry and payouts",
   description: "Holder registry and corporate-action payouts for tokenized bonds on Solana",
+  icons: { icon: { url: "/pritok-mark.svg", type: "image/svg+xml" } },
 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {

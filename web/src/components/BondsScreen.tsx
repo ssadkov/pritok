@@ -7,6 +7,7 @@ import { LangSwitch, useT } from "@/lib/i18n";
 import type { T } from "@/lib/i18n-core";
 import { KIND, count, dateTime, money, short } from "@/lib/view";
 import { NewBondButton } from "./NewBondButton";
+import { Brand } from "./Brand";
 
 type Status = "subscription" | "debt" | "live" | "matured";
 const STATUS: Record<Status, [string, string]> = {
@@ -61,10 +62,7 @@ export function BondsScreen({ demo }: { demo: boolean }) {
     <>
       <header className="top">
         <div className="wrap">
-          <a className="brand" href="/" style={{ textDecoration: "none" }}>
-            <span className="brand-mark" />
-            PRITOK<small>{t("реестр и выплаты")}</small>
-          </a>
+          <Brand subtitle={t("реестр и выплаты")} />
           <nav className="seg" aria-label={t("Разделы")}>
             <a className="seg-link" aria-current="page" href="/bonds">
               {t("Выпуски")}
