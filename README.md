@@ -1,6 +1,6 @@
 # PRITOK
 
-**Bond registry and payouts on Solana.** *Pritok* is Russian for "inflow": coupons and principal flowing to bondholders on schedule.
+**Bond registry and payouts on Solana.** *Pritok* is Russian for "inflow": coupons and principal flowing to bondholders on schedule. The name also reads as **PRI**ncipal + **TOK**ens.
 
 PRITOK services a tokenized bond after placement — the job of a registrar and a paying agent. It knows who held the bond on each record date, calculates what every holder is owed, and lets the platform operator execute each corporate action for all holders with one command: pay onchain or route to a bank, retire the bonds at maturity. It shows publicly when an issuer has not paid. Every entitlement and every payment can be checked in the Solana explorer.
 
