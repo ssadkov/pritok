@@ -8,7 +8,8 @@ Built for the Superteam Kazakhstan × KASE side track [*Corporate Actions on Blo
 
 | | |
 |---|---|
-| **Live demo** | **https://pritok-sol.vercel.app** — Solana devnet, role screens with one-click demo signing |
+| **Video** | **https://youtu.be/LSAAGoHZc4w** — two-minute pitch |
+| **Live demo** | **https://pritok-sol.vercel.app/demo** — Solana devnet, role screens with one-click demo signing ([project page](https://pritok-sol.vercel.app)) |
 | Program | [`9LMSMqD3xMBaNdfRb4bKDT3MBTX8ry1Na84rMSJ787aY`](https://explorer.solana.com/address/9LMSMqD3xMBaNdfRb4bKDT3MBTX8ry1Na84rMSJ787aY?cluster=devnet) on devnet |
 | Full lifecycle on devnet | [`FCNB…C6ry`](https://pritok-sol.vercel.app/bond/FCNBFwobxkZw7k7n5U3KsRjzR1VSTtXiAD13FsvQC6ry) — coupons, 20% amortization, a default and its cure, wallet and bank payouts, redemption with burn |
 | Operator-run lifecycle | [`H9xK…mdja`](https://pritok-sol.vercel.app/bond/H9xKnWEqqxdYC4K7PSQChiZJddQy53dw5Z7sm72omdja) — every coupon and the redemption executed by the operator, bonds burned by the program |
@@ -18,7 +19,7 @@ Built for the Superteam Kazakhstan × KASE side track [*Corporate Actions on Blo
 
 ## Try it in three minutes
 
-1. Open **https://pritok-sol.vercel.app** and press **New demo issue**. The issuer's form sets face value, coupon rate, term (one to four semi-annual coupons) and issue size; the defaults create the standard demo issue in one click. The interface is in English by default; **KZ · EN · RU** in the header switches to Kazakh or Russian (or add `?lang=kk|en|ru` to a link). In about 10 seconds the bond is created, three investors are admitted, and the issue is placed among them 30% / 20% / 50% (by default 1 000 bonds of 100 000 ₸ at 16%). Time is accelerated: one half-year lasts four minutes, so the whole two-year issue plays out in about 17 minutes.
+1. Open **https://pritok-sol.vercel.app/demo** and press **New demo issue**. The issuer's form sets face value, coupon rate, term (one to four semi-annual coupons) and issue size; the defaults create the standard demo issue in one click. The interface is in English by default; **KZ · EN · RU** in the header switches to Kazakh or Russian (or add `?lang=kk|en|ru` to a link). In about 10 seconds the bond is created, three investors are admitted, and the issue is placed among them 30% / 20% / 50% (by default 1 000 bonds of 100 000 ₸ at 16%). Time is accelerated: one half-year lasts four minutes, so the whole two-year issue plays out in about 17 minutes.
 2. Follow the **Now** bar at the top. It reads the bond's state and offers the next step with a button that switches to the right role.
 3. **Investor**: transfer or sell bonds before the record date and watch the coupon follow the bond. Sell at a clean price and see the accrued interest the program adds.
 4. **Issuer**: fund a coupon, or fund only 75% to trigger a public default, then pay the rest to cure it. Declare a partial redemption on a future coupon date.

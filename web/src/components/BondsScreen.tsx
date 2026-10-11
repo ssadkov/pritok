@@ -67,7 +67,7 @@ export function BondsScreen({ demo }: { demo: boolean }) {
             <a className="seg-link" aria-current="page" href="/bonds">
               {t("Выпуски")}
             </a>
-            <a className="seg-link" href="/">
+            <a className="seg-link" href="/demo">
               {t("Текущий выпуск")}
             </a>
             <a className="seg-link" href="/portfolio">
