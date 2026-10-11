@@ -187,7 +187,8 @@ export default function Landing() {
           <h2>Team</h2>
           <div className="lp-team">
             <div className="lp-person">
-              <div className="lp-avatar" aria-hidden="true">I</div>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img className="lp-photo center" src="/team/indira.jpg" alt="Indira" />
               <div>
                 <h3>Indira</h3>
                 <p className="lp-role">Team lead</p>
