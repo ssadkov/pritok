@@ -188,9 +188,9 @@ export default function Landing() {
           <div className="lp-team">
             <div className="lp-person">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img className="lp-photo center" src="/team/indira.jpg" alt="Indira" />
+              <img className="lp-photo center" src="/team/indira.jpg" alt="Indira Poida" />
               <div>
-                <h3>Indira</h3>
+                <h3>Indira Poida</h3>
                 <p className="lp-role">Team lead</p>
                 <p>Supervised training for 300 traders — knows how investors read a bond and its payments.</p>
               </div>
