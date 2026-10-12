@@ -12,7 +12,7 @@ The issuer creates a test bond: one hundred thousand tenge face value, sixteen p
 In the explorer, the bond mint has its accounts frozen by default, and the bond itself is the permanent delegate. Holders cannot move bonds outside the program.
 
 **V4 · 0:42–1:04 · Record date**
-Coupon one. Aigerim sends ten bonds to Bolat before the record date. After it, Bolat sends ten to the fund. The register as of the record date shows two hundred ninety, two hundred ten, five hundred: the coupon follows the bond held on that date.
+Coupon one. Aigerim sends ten bonds to Bolat before the record date. After it, she sends ten more to the fund. The register as of the record date still shows Aigerim two hundred ninety, the fund five hundred, Bolat two hundred ten: the coupon follows the bond held on that date.
 
 **V5 · 1:04–1:28 · Coupon payout**
 The entitlement is bonds on the record date times the coupon per bond — eight thousand tenge. The issuer funds the payout vault. The operator presses Execute payout, and all three holders are paid in one transaction. Each payment creates a receipt account. Here are the program logs.
